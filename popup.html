@@ -82,6 +82,46 @@
           <input id="blur-media" type="checkbox">
           <i aria-hidden="true"></i>
         </label>
+
+        <label class="check-row">
+          <span>
+            <strong>Auto-blur sensitive data</strong>
+            <small>Personal details, contact data, credentials, IDs and accounts</small>
+          </span>
+          <input id="blur-pii" type="checkbox">
+          <i aria-hidden="true"></i>
+        </label>
+      </section>
+
+      <section class="panel trigger-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Conditional blur</h2>
+            <p>Choose focused filters for conditional sections</p>
+          </div>
+          <span id="trigger-count">No filters</span>
+        </div>
+
+        <div class="trigger-tools">
+          <span>Filter packs</span>
+          <button type="button" data-trigger-preset="spoilers" aria-pressed="false">Spoilers</button>
+          <button type="button" data-trigger-preset="violence" aria-pressed="false">Violence</button>
+          <button type="button" data-trigger-preset="results" aria-pressed="false">Results</button>
+        </div>
+
+        <label class="trigger-field" for="trigger-words">
+          <span>Custom words &amp; phrases</span>
+          <textarea id="trigger-words" rows="2" spellcheck="false"
+            placeholder="One broad, exact trigger per line"></textarea>
+        </label>
+
+        <label class="trigger-field context-field" for="context-words">
+          <span>Titles, characters &amp; teams <i>optional</i></span>
+          <textarea id="context-words" rows="1" spellcheck="false"
+            placeholder="Bake Off, Arsenal, Succession…"></textarea>
+        </label>
+
+        <p class="trigger-help">Context names make ambiguous spoiler and result language more precise. Violence remains safety-biased.</p>
       </section>
 
       <section class="selection-panel">
@@ -140,11 +180,16 @@
       <span class="rule-copy">
         <strong class="rule-label"></strong>
         <code class="rule-selector"></code>
+        <select class="rule-condition" aria-label="Section blur condition">
+          <option value="always">Always blur</option>
+          <option value="trigger">Blur on trigger words</option>
+        </select>
       </span>
       <button class="rule-delete" type="button" aria-label="Delete selection">×</button>
     </article>
   </template>
 
+  <script src="lib/text-conditions.js"></script>
   <script src="lib/state.js"></script>
   <script src="popup.js"></script>
 </body>

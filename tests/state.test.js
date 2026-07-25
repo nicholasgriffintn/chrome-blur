@@ -6,7 +6,7 @@ const vm = require("node:vm");
 const { webcrypto } = require("node:crypto");
 
 const repositoryRoot = path.resolve(__dirname, "..");
-const core = loadGlobalScript("lib/state.js", "BlurCore");
+const core = loadGlobalScripts(["lib/text-conditions.js", "lib/state.js"], "BlurCore");
 
 test("normalises malformed persisted state to safe defaults", () => {
   const state = core.normaliseState({
@@ -19,7 +19,14 @@ test("normalises malformed persisted state to safe defaults", () => {
         sitePatterns: [" Example.com/ ", "example.com"],
         blurAmount: 250,
         blurMedia: false,
-        rules: [{ selector: "  .headline  ", kind: "unexpected" }, { nope: true }]
+        enabledPresets: ["results", "invalid", "results"],
+        triggerWords: [" Death ", "death", "final score"],
+        contextWords: [" Bake Off ", "bake off", "Arsenal"],
+        rules: [
+          { selector: "  .headline  ", kind: "unexpected", condition: "trigger" },
+          { selector: ".card", kind: "section", condition: "trigger" },
+          { nope: true }
+        ]
       }
     ]
   });
@@ -28,8 +35,31 @@ test("normalises malformed persisted state to safe defaults", () => {
   assert.equal(state.activeProfileId, "work");
   assert.deepEqual(Array.from(state.profiles[0].sitePatterns), ["example.com"]);
   assert.equal(state.profiles[0].blurAmount, 100);
-  assert.equal(state.profiles[0].rules.length, 1);
+  assert.equal(state.profiles[0].blurPii, true);
+  assert.deepEqual(Array.from(state.profiles[0].triggerWords), ["Death", "final score"]);
+  assert.deepEqual(Array.from(state.profiles[0].enabledPresets), ["results"]);
+  assert.deepEqual(Array.from(state.profiles[0].contextWords), ["Bake Off", "Arsenal"]);
+  assert.equal(state.profiles[0].rules.length, 2);
   assert.equal(state.profiles[0].rules[0].kind, "element");
+  assert.equal(state.profiles[0].rules[0].condition, "always");
+  assert.equal(state.profiles[0].rules[1].condition, "trigger");
+});
+
+test("enables sensitive-data protection for default and new profiles", () => {
+  assert.equal(core.createDefaultState().profiles[0].blurPii, true);
+  assert.equal(core.createProfile("Work").blurPii, true);
+  assert.equal(
+    core.normaliseState({
+      enabled: true,
+      activeProfileId: "work",
+      profiles: [{
+        ...enabledProfile(["example.com"]),
+        id: "work",
+        blurPii: false
+      }]
+    }).profiles[0].blurPii,
+    false
+  );
 });
 
 test("matches exact hosts without leaking into suffix lookalikes", () => {
@@ -116,9 +146,11 @@ function enabledProfile(patterns) {
   };
 }
 
-function loadGlobalScript(relativePath, globalName) {
+function loadGlobalScripts(relativePaths, globalName) {
   const context = vm.createContext({ crypto: webcrypto, URL });
-  const source = fs.readFileSync(path.join(repositoryRoot, relativePath), "utf8");
-  vm.runInContext(source, context);
+  for (const relativePath of relativePaths) {
+    const source = fs.readFileSync(path.join(repositoryRoot, relativePath), "utf8");
+    vm.runInContext(source, context);
+  }
   return context[globalName];
 }

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Blur",
   "version": "1.0.0",
-  "description": "Blur distracting media and selected page content with reusable site profiles.",
+  "description": "Blur sensitive data, distracting media and selected page content with reusable site profiles.",
   "minimum_chrome_version": "120",
   "permissions": [
     "activeTab",
@@ -33,6 +33,9 @@
         "content.css"
       ],
       "js": [
+        "lib/pii-detector.js",
+        "lib/pii-dom.js",
+        "lib/text-conditions.js",
         "lib/state.js",
         "lib/selectors.js",
         "lib/blur-model.js",

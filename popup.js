@@ -20,6 +20,10 @@
     blurAmount: document.querySelector("#blur-amount"),
     blurOutput: document.querySelector("#blur-output"),
     blurMedia: document.querySelector("#blur-media"),
+    blurPii: document.querySelector("#blur-pii"),
+    triggerWords: document.querySelector("#trigger-words"),
+    contextWords: document.querySelector("#context-words"),
+    triggerCount: document.querySelector("#trigger-count"),
     rules: document.querySelector("#rules"),
     ruleCount: document.querySelector("#rule-count"),
     clearRules: document.querySelector("#clear-rules"),
@@ -77,6 +81,27 @@
       queueSave();
     });
 
+    elements.blurPii.addEventListener("change", () => {
+      activeProfile().blurPii = elements.blurPii.checked;
+      queueSave();
+    });
+
+    elements.triggerWords.addEventListener("input", () => {
+      activeProfile().triggerWords = BlurTextConditions.parseTerms(elements.triggerWords.value);
+      renderTriggerControls();
+      renderRules();
+      queueSave();
+    });
+
+    elements.contextWords.addEventListener("input", () => {
+      activeProfile().contextWords = BlurTextConditions.parseTerms(elements.contextWords.value);
+      queueSave();
+    });
+
+    document.querySelectorAll("[data-trigger-preset]").forEach((button) => {
+      button.addEventListener("click", () => toggleTriggerPreset(button.dataset.triggerPreset));
+    });
+
     elements.addCurrentSite.addEventListener("click", addCurrentSite);
     document.querySelector("#new-profile").addEventListener("click", addProfile);
     document.querySelector("#rename-profile").addEventListener("click", renameProfile);
@@ -105,6 +130,10 @@
     elements.blurAmount.value = String(profile.blurAmount);
     elements.blurOutput.textContent = `${profile.blurAmount}%`;
     elements.blurMedia.checked = profile.blurMedia;
+    elements.blurPii.checked = profile.blurPii;
+    elements.triggerWords.value = profile.triggerWords.join("\n");
+    elements.contextWords.value = profile.contextWords.join("\n");
+    renderTriggerControls();
     renderRules();
     renderStatus();
   }
@@ -151,10 +180,50 @@
       row.querySelector(".rule-kind").textContent = rule.kind === "section" ? "Section" : "Element";
       row.querySelector(".rule-label").textContent = rule.label;
       row.querySelector(".rule-selector").textContent = rule.selector;
+      const condition = row.querySelector(".rule-condition");
+      condition.hidden = rule.kind !== "section";
+      condition.value = rule.condition;
+      condition.classList.toggle(
+        "is-triggered",
+        rule.condition === BlurTextConditions.SECTION_CONDITIONS.TRIGGER
+      );
+      condition.classList.toggle(
+        "is-empty-condition",
+        rule.condition === BlurTextConditions.SECTION_CONDITIONS.TRIGGER &&
+          !hasTriggerFilters(activeProfile())
+      );
+      condition.title =
+        rule.condition === BlurTextConditions.SECTION_CONDITIONS.TRIGGER &&
+          !hasTriggerFilters(activeProfile())
+        ? "Enable a filter pack or add a custom trigger"
+        : "";
+      condition.querySelector('[value="trigger"]').textContent =
+        `On conditional filters (${triggerFilterCount(activeProfile())})`;
 
       enabled.addEventListener("change", () => {
         rule.enabled = enabled.checked;
         row.classList.toggle("is-disabled", !enabled.checked);
+        queueSave();
+      });
+      condition.addEventListener("change", () => {
+        rule.condition = condition.value === BlurTextConditions.SECTION_CONDITIONS.TRIGGER
+          ? BlurTextConditions.SECTION_CONDITIONS.TRIGGER
+          : BlurTextConditions.SECTION_CONDITIONS.ALWAYS;
+        condition.classList.toggle(
+          "is-triggered",
+          rule.condition === BlurTextConditions.SECTION_CONDITIONS.TRIGGER
+        );
+        condition.classList.toggle(
+          "is-empty-condition",
+          rule.condition === BlurTextConditions.SECTION_CONDITIONS.TRIGGER &&
+            !hasTriggerFilters(activeProfile())
+        );
+        if (
+          rule.condition === BlurTextConditions.SECTION_CONDITIONS.TRIGGER &&
+          !hasTriggerFilters(activeProfile())
+        ) {
+          showStatus("Enable a filter or add a custom trigger");
+        }
         queueSave();
       });
       row.querySelector(".rule-delete").addEventListener("click", () => {
@@ -177,6 +246,41 @@
     if (!profile.sitePatterns.includes(hostname)) profile.sitePatterns.push(hostname);
     render();
     queueSave();
+  }
+
+  function toggleTriggerPreset(presetName) {
+    if (!BlurTextConditions.PRESETS[presetName]) return;
+    const profile = activeProfile();
+    profile.enabledPresets = profile.enabledPresets.includes(presetName)
+      ? profile.enabledPresets.filter((name) => name !== presetName)
+      : BlurTextConditions.parsePresetNames([...profile.enabledPresets, presetName]);
+    renderTriggerControls();
+    renderRules();
+    queueSave();
+  }
+
+  function renderTriggerControls() {
+    const profile = activeProfile();
+    const presetCount = profile.enabledPresets.length;
+    const customCount = profile.triggerWords.length;
+    const summary = [];
+    if (presetCount) summary.push(`${presetCount} ${presetCount === 1 ? "pack" : "packs"}`);
+    if (customCount) summary.push(`${customCount} custom`);
+    elements.triggerCount.textContent = summary.join(" · ") || "No filters";
+
+    document.querySelectorAll("[data-trigger-preset]").forEach((button) => {
+      const active = profile.enabledPresets.includes(button.dataset.triggerPreset);
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+  }
+
+  function hasTriggerFilters(profile) {
+    return triggerFilterCount(profile) > 0;
+  }
+
+  function triggerFilterCount(profile) {
+    return profile.enabledPresets.length + profile.triggerWords.length;
   }
 
   function addProfile() {

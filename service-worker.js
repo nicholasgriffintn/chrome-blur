@@ -1,4 +1,4 @@
-importScripts("lib/state.js");
+importScripts("lib/text-conditions.js", "lib/state.js");
 
 const { STORAGE_KEY, createDefaultState } = BlurCore;
 

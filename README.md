@@ -2,13 +2,17 @@
 
 Blur distracting or sensitive page content before it reaches your screen share, recording or line of sight.
 
+![Blur screenshot](/screenshots/extension.png)
+
 ## Features
 
 - Blur every image and video on selected websites.
+- Auto-blur sensitive data in page text, editable regions and labelled values.
 - Keep separate profiles for different sites or tasks.
 - Tune blur strength from 0–100%.
 - Pick individual page elements and remember their CSS selectors.
 - Pick a section to find and blur its text, images, videos and form controls.
+- Make selected sections conditional with focused spoiler, violence and result filters.
 - Reveal an individual blurred image, video, CSS background or remembered section from its hover controls.
 - Reapply remembered rules after reloads and to content added by dynamic websites.
 - Pause one profile or the whole extension.
@@ -18,8 +22,9 @@ Blur distracting or sensitive page content before it reaches your screen share, 
 1. Install Blur and open a normal website.
 2. Open the extension popup.
 3. Select **Use this site** to add the current domain to the default profile.
-4. Adjust the blur strength and choose whether to blur every image and video.
+4. Adjust the blur strength and choose whether to blur media and sensitive data.
 5. Select **Pick element** or **Pick section**, then choose content on the page.
+6. For conditional sections, enable filter packs or add custom triggers, then change the remembered section from **Always blur** to **On conditional filters**.
 
 The popup closes while picking. In section mode, Blur compares nearby ancestors using repeated data attributes, roles, classes and parent structures, then applies the rule to **every card sharing the inferred component type**. Press `↑` for a broader parent or `↓` for a narrower child, and press `Esc` to cancel selection. Blur saves changes automatically.
 
@@ -35,11 +40,17 @@ Each profile contains its own site patterns, strength and remembered selections.
 
 All enabled profiles matching the current page are applied. Where rules overlap, Blur uses the stronger setting.
 
+**Auto-blur sensitive data** is enabled by default for every profile. It detects email addresses, phone numbers, Luhn-valid payment cards, checksum-valid IBANs, public IPv4 addresses, common identity-number formats, strong postal-address patterns and explicitly labelled personal details. Associated labels, ARIA references, definition lists, tables, contenteditable regions and common label/value layouts provide context for ambiguous values such as names, dates, credentials and account numbers.
+
 ## How section selection works
 
 An element selection blurs the selected node as one visual object. A section selection walks the selected container, wraps visible text fragments and marks its images, videos, CSS backgrounds and form controls separately. A `MutationObserver` applies the same treatment to content inserted later by single-page applications.
 
 Blur tracks why each target is blurred. If an image is covered by both the profile’s media default and a section rule, **Reveal section** temporarily overrides both sources for every item in that section. **Reveal image** still controls media independently while its section remains blurred.
+
+Each profile has three optional filter packs plus broad custom triggers. **Spoilers** requires entertainment or a configured title or character near ambiguous language. **Results** looks for score patterns, full-time markers, named opponents and sports or configured team context. **Violence** deliberately accepts broader matches, including acute disasters, evacuations and human-targeted threats, because missing sensitive material is worse than an occasional false positive.
+
+Matching scans visible text, headings, links, metadata, ARIA labels and image `alt` descriptions. It is case-insensitive, recognises simple plural variants and normalises curly apostrophes, hyphens and Unicode dashes. Add show, character or team names to the optional context list to make ambiguous matches more precise.
 
 Blur stores the generated CSS selector, not the selected text or media. IDs and stable class names are preferred, with a short structural selector as a fallback.
 
@@ -47,7 +58,7 @@ Blur stores the generated CSS selector, not the selected text or media. IDs and 
 
 The content script runs at `document_start`, reads matching profiles and installs blur classes before most page content is parsed. This avoids the usual visible flash on normal navigations. Chrome storage and page execution are asynchronous, so an absolute zero-frame guarantee is not possible on every website.
 
-New and replaced images or videos are guarded synchronously, including responsive `src`/`srcset` updates and class replacement by page frameworks. Heavier section text and background detection is batched into animation frames and limited to newly inserted DOM branches. For whole-page defaults, Blur pre-scans likely CSS background candidates and confirms them with computed styles.
+New and replaced images or videos are guarded synchronously, including responsive `src`/`srcset` updates and class replacement by page frameworks. Sensitive data in newly inserted text, editable regions and changed fields is guarded in the same mutation pass. Conditional sections are reevaluated when text, ARIA labels or image descriptions change. Text-node observation is enabled only while sensitive-data protection or a conditional section rule is active. Heavier section text and background detection is batched into animation frames and limited to newly inserted DOM branches. For whole-page defaults, Blur pre-scans likely CSS background candidates and confirms them with computed styles.
 
 ## Privacy
 
@@ -58,9 +69,11 @@ Stored settings include:
 - Profile names and enabled states
 - Site and URL patterns
 - Blur strength
+- Whether media and sensitive-data protection are enabled
+- Enabled filter packs, custom triggers and optional context names
 - CSS selectors and short labels describing remembered selections
 
-Page text, images, videos, browsing history and blurred content are not collected or transmitted.
+Detection runs inside the current page. Page text and field values are not copied into extension storage, logged, collected or transmitted.
 
 ## Permissions
 
@@ -95,3 +108,5 @@ To test a local checkout:
 - A CSS background attached to a container cannot be filtered separately from that container’s foreground content. Blur therefore treats the element as one visual target.
 - CSS backgrounds with no inline style, semantic class or role may only be detected when hovered or selected as part of a section.
 - Page-level CSS filters can affect how a nested reveal appears.
+- Unlabelled names cannot be identified reliably without a language model, so free-form occurrences may not be detected.
+- Sensitive-data matching favours precision, but unusual or country-specific formats can still produce false negatives.

@@ -49,6 +49,45 @@ test("deduplicates media that appears in more than one mutation", () => {
   assert.deepEqual([...targets], [image]);
 });
 
+test("queues changed text and accessible descriptions for conditional reevaluation", () => {
+  const textParent = createElement("p");
+  const text = { nodeType: 3, parentElement: textParent };
+  const image = createElement("img");
+  const labelledCard = createElement("article");
+
+  const roots = lifecycle.collectDeferredRoots([
+    { type: "characterData", target: text, addedNodes: [] },
+    { type: "attributes", attributeName: "alt", target: image, addedNodes: [] },
+    {
+      type: "attributes",
+      attributeName: "aria-label",
+      target: labelledCard,
+      addedNodes: []
+    }
+  ]);
+
+  assert.deepEqual([...roots], [textParent, image, labelledCard]);
+  assert.equal(lifecycle.observerOptions(true).characterData, true);
+  assert.equal(lifecycle.observerOptions(false).characterData, undefined);
+});
+
+test("queues sensitive field changes for immediate PII reevaluation", () => {
+  const field = createElement("input");
+  const roots = lifecycle.collectDeferredRoots([
+    { type: "attributes", attributeName: "value", target: field, addedNodes: [] },
+    { type: "attributes", attributeName: "type", target: field, addedNodes: [] },
+    { type: "attributes", attributeName: "autocomplete", target: field, addedNodes: [] },
+    { type: "attributes", attributeName: "aria-labelledby", target: field, addedNodes: [] },
+    { type: "attributes", attributeName: "contenteditable", target: field, addedNodes: [] }
+  ]);
+
+  assert.deepEqual([...roots], [field]);
+  assert.deepEqual(
+    lifecycle.observerOptions(true).attributeFilter.includes("value"),
+    true
+  );
+});
+
 test("does not animate between clear and blurred media states", () => {
   const css = fs.readFileSync(path.join(__dirname, "..", "content.css"), "utf8");
 

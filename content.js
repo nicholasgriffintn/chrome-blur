@@ -15,12 +15,13 @@
   ].join(", ");
   const SECTION_CONTROL_SELECTOR = "input, textarea, select, button";
   const EXCLUDED_TEXT_PARENTS = new Set([
-    "SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA", "INPUT", "SELECT", "OPTION", "BUTTON"
+    "SCRIPT", "STYLE", "NOSCRIPT", "TITLE", "TEXTAREA", "INPUT", "SELECT", "OPTION", "BUTTON"
   ]);
   const MANAGED_TARGET_CLASS = "blur-extension-target";
   const BACKGROUND_TARGET_CLASS = "blur-extension-background-target";
   const SECTION_CLASS = "blur-extension-section";
   const TEXT_FRAGMENT_CLASS = "blur-extension-text-fragment";
+  const PII_FRAGMENT_CLASS = BlurPiiDom.FRAGMENT_CLASS;
   const REVEALED_CLASS = "blur-extension-revealed";
   const PICKER_CLASS = "blur-extension-picker-candidate";
 
@@ -52,6 +53,7 @@
     chrome.runtime.onMessage.addListener(handleMessage);
     document.addEventListener("pointerover", handleMediaPointerOver, true);
     document.addEventListener("pointerout", handleMediaPointerOut, true);
+    document.addEventListener("input", handleSensitiveFieldInput, true);
     window.addEventListener("popstate", refreshProfilesForCurrentUrl);
     window.addEventListener("hashchange", refreshProfilesForCurrentUrl);
     window.addEventListener("load", reapplyAll, { once: true });
@@ -83,15 +85,19 @@
       if (refreshProfilesForCurrentUrl()) return;
 
       const mediaTargets = BlurMediaLifecycle.collectImmediateMediaTargets(mutations);
-      if (mediaTargets.size) {
-        withObserverPaused(() => guardNativeMediaTargets(mediaTargets));
+      const changedRoots = BlurMediaLifecycle.collectDeferredRoots(mutations);
+      if (mediaTargets.size || changedRoots.size) {
+        withObserverPaused(() => {
+          guardNativeMediaTargets(mediaTargets);
+          guardPiiRoots(changedRoots);
+          guardConditionalSections(changedRoots);
+        });
       }
 
-      BlurMediaLifecycle.collectDeferredRoots(mutations)
-        .forEach((root) => pendingRoots.add(root));
+      changedRoots.forEach((root) => pendingRoots.add(root));
       scheduleApply();
     });
-    observer.observe(document, BlurMediaLifecycle.OBSERVER_OPTIONS);
+    observer.observe(document, currentObserverOptions());
   }
 
   function refreshProfilesForCurrentUrl() {
@@ -126,6 +132,8 @@
   function applyProfiles(root) {
     if (!profiles.length || !root) return;
 
+    applyPiiProfiles(root);
+
     for (const profile of profiles) {
       const radius = BlurCore.blurPixels(profile.blurAmount);
 
@@ -141,7 +149,7 @@
         const matches = safeQueryWithin(root, rule.selector);
         for (const element of matches) {
           if (rule.kind === "section") {
-            blurSection(element, radius, sourceId, element);
+            applySectionRule(element, element, profile, rule, radius, sourceId);
           } else {
             markTarget(element, radius, sourceId);
           }
@@ -149,9 +157,75 @@
 
         if (rule.kind === "section" && root instanceof Element) {
           const boundary = safeClosest(root, rule.selector);
-          if (boundary && !matches.includes(boundary)) blurSection(root, radius, sourceId, boundary);
+          if (boundary && !matches.includes(boundary)) {
+            applySectionRule(root, boundary, profile, rule, radius, sourceId);
+          }
         }
       }
+    }
+  }
+
+  function applyPiiProfiles(root) {
+    const piiProfiles = profiles.filter((profile) => profile.blurPii);
+    if (!piiProfiles.length) return;
+
+    BlurPiiDom.apply(root, {
+      onFragment(fragment) {
+        markPiiTarget(fragment, piiProfiles);
+      },
+      onStaticValue(element) {
+        markPiiTarget(element, piiProfiles);
+      },
+      onField(field) {
+        updatePiiField(field, piiProfiles);
+      }
+    });
+  }
+
+  function markPiiTarget(target, piiProfiles) {
+    for (const profile of piiProfiles) {
+      markTarget(
+        target,
+        BlurCore.blurPixels(profile.blurAmount),
+        `${profile.id}:pii`
+      );
+    }
+  }
+
+  function updatePiiField(field, piiProfiles) {
+    const activeSourceIds = new Set();
+
+    for (const profile of piiProfiles) {
+      const sourceId = `${profile.id}:pii`;
+      activeSourceIds.add(sourceId);
+      if (BlurPiiDetector.fieldNeedsBlur(field)) {
+        markTarget(field, BlurCore.blurPixels(profile.blurAmount), sourceId);
+      } else {
+        removeTargetSource(field, sourceId);
+      }
+    }
+
+    for (const sourceId of registry.sourcesFor(field)) {
+      if (sourceId.endsWith(":pii") && !activeSourceIds.has(sourceId)) {
+        removeTargetSource(field, sourceId);
+      }
+    }
+    field.classList.toggle(
+      BlurPiiDom.FIELD_CLASS,
+      [...registry.sourcesFor(field)].some((sourceId) => sourceId.endsWith(":pii"))
+    );
+  }
+
+  function applySectionRule(scope, boundary, profile, rule, radius, sourceId) {
+    if (rule.condition !== BlurTextConditions.SECTION_CONDITIONS.TRIGGER) {
+      blurSection(scope, radius, sourceId, boundary);
+      return;
+    }
+
+    if (BlurTextConditions.shouldBlurSection(boundary, rule.condition, profile)) {
+      blurSection(boundary, radius, sourceId, boundary);
+    } else {
+      unblurSectionSource(boundary, sourceId);
     }
   }
 
@@ -172,7 +246,16 @@
 
           if (rule.kind === "section") {
             const boundary = safeClosest(target, rule.selector);
-            if (!boundary) continue;
+            if (
+              !boundary ||
+              !BlurTextConditions.shouldBlurSection(
+                boundary,
+                rule.condition,
+                profile
+              )
+            ) {
+              continue;
+            }
             boundary.classList.add(SECTION_CLASS);
             markTarget(target, radius, sourceId, boundary);
           } else if (safeClosest(target, rule.selector) === target) {
@@ -181,6 +264,58 @@
         }
       }
     }
+  }
+
+  function guardConditionalSections(roots) {
+    if (!roots.size || !hasConditionalSectionRules()) return;
+
+    for (const profile of profiles) {
+      const radius = BlurCore.blurPixels(profile.blurAmount);
+      for (const rule of profile.rules) {
+        if (
+          !rule.enabled ||
+          rule.kind !== "section" ||
+          rule.condition !== BlurTextConditions.SECTION_CONDITIONS.TRIGGER
+        ) {
+          continue;
+        }
+
+        const boundaries = new Set();
+        for (const root of roots) {
+          safeQueryWithin(root, rule.selector).forEach((boundary) => boundaries.add(boundary));
+          const boundary = safeClosest(root, rule.selector);
+          if (boundary) boundaries.add(boundary);
+        }
+
+        const sourceId = `${profile.id}:${rule.id}`;
+        boundaries.forEach((boundary) => {
+          applySectionRule(boundary, boundary, profile, rule, radius, sourceId);
+        });
+      }
+    }
+  }
+
+  function guardPiiRoots(roots) {
+    if (!roots.size || !profiles.some((profile) => profile.blurPii)) return;
+    const scanRoots = new Set();
+    roots.forEach((root) => {
+      scanRoots.add(root);
+      if (root.parentElement) scanRoots.add(root.parentElement);
+    });
+    scanRoots.forEach(applyPiiProfiles);
+  }
+
+  function handleSensitiveFieldInput(event) {
+    if (
+      !(event.target instanceof Element) ||
+      !event.target.matches(BlurPiiDom.FIELD_SELECTOR)
+    ) {
+      return;
+    }
+    withObserverPaused(() => updatePiiField(
+      event.target,
+      profiles.filter((profile) => profile.blurPii)
+    ));
   }
 
   function blurSection(scope, radius, sourceId, boundary) {
@@ -193,6 +328,10 @@
       .forEach((element) => markTarget(element, radius, sourceId, boundary));
     findWithin(scope, `.${TEXT_FRAGMENT_CLASS}`)
       .forEach((element) => markTarget(element, radius, sourceId, boundary));
+    findWithin(scope, `.${PII_FRAGMENT_CLASS}`)
+      .forEach((element) => markTarget(element, radius, sourceId, boundary));
+    findWithin(scope, `.${BlurPiiDom.STATIC_VALUE_CLASS}`)
+      .forEach((element) => markTarget(element, radius, sourceId, boundary));
 
     const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
@@ -200,7 +339,12 @@
         if (!node.parentElement || EXCLUDED_TEXT_PARENTS.has(node.parentElement.tagName)) {
           return NodeFilter.FILTER_REJECT;
         }
-        if (node.parentElement.closest(`.${TEXT_FRAGMENT_CLASS}, [contenteditable="true"]`)) {
+        if (
+          node.parentElement.closest(
+            `.${TEXT_FRAGMENT_CLASS}, .${PII_FRAGMENT_CLASS}, ` +
+              `.${BlurPiiDom.STATIC_VALUE_CLASS}, [contenteditable="true"]`
+          )
+        ) {
           return NodeFilter.FILTER_REJECT;
         }
         return NodeFilter.FILTER_ACCEPT;
@@ -216,6 +360,37 @@
       textNode.parentNode?.replaceChild(fragment, textNode);
       fragment.append(textNode);
       markTarget(fragment, radius, sourceId, boundary);
+    }
+  }
+
+  function unblurSectionSource(section, sourceId) {
+    const affectedTargets = registry.removeSectionSource(section, sourceId);
+    const parentsToNormalise = new Set();
+
+    affectedTargets.forEach((target) => {
+      if (registry.sourcesFor(target).size) {
+        target.style.setProperty("--blur-extension-radius", `${registry.radiusFor(target)}px`);
+        updateTargetAppearance(target);
+        return;
+      }
+
+      revealedTargets.delete(target);
+      target.classList.remove(
+        MANAGED_TARGET_CLASS,
+        BACKGROUND_TARGET_CLASS,
+        REVEALED_CLASS
+      );
+      target.style.removeProperty("--blur-extension-radius");
+
+      if (target.classList.contains(TEXT_FRAGMENT_CLASS)) {
+        if (target.parentElement) parentsToNormalise.add(target.parentElement);
+        target.replaceWith(...target.childNodes);
+      }
+    });
+
+    parentsToNormalise.forEach((parent) => parent.normalize());
+    if (!registry.targetsForSection(section).size) {
+      section.classList.remove(SECTION_CLASS);
     }
   }
 
@@ -237,6 +412,19 @@
     markTarget(element, radius, sourceId, section);
   }
 
+  function removeTargetSource(target, sourceId) {
+    if (!registry.removeTargetSource(target, sourceId)) return;
+    if (registry.sourcesFor(target).size) {
+      target.style.setProperty("--blur-extension-radius", `${registry.radiusFor(target)}px`);
+      updateTargetAppearance(target);
+      return;
+    }
+
+    revealedTargets.delete(target);
+    target.classList.remove(MANAGED_TARGET_CLASS, REVEALED_CLASS);
+    target.style.removeProperty("--blur-extension-radius");
+  }
+
   function updateTargetAppearance(target) {
     target.classList.toggle(
       REVEALED_CLASS,
@@ -246,7 +434,11 @@
 
   function clearManagedEffects() {
     document.querySelectorAll(`.${MANAGED_TARGET_CLASS}`).forEach((element) => {
-      element.classList.remove(MANAGED_TARGET_CLASS, REVEALED_CLASS);
+      element.classList.remove(
+        MANAGED_TARGET_CLASS,
+        REVEALED_CLASS,
+        BlurPiiDom.FIELD_CLASS
+      );
       element.style.removeProperty("--blur-extension-radius");
     });
 
@@ -259,6 +451,7 @@
     document.querySelectorAll(`.${TEXT_FRAGMENT_CLASS}`).forEach((fragment) => {
       fragment.replaceWith(...fragment.childNodes);
     });
+    BlurPiiDom.clear(document);
     registry.clear();
   }
 
@@ -300,8 +493,24 @@
     try {
       callback();
     } finally {
-      if (wasObserving) observer.observe(document, BlurMediaLifecycle.OBSERVER_OPTIONS);
+      if (wasObserving) observer.observe(document, currentObserverOptions());
     }
+  }
+
+  function currentObserverOptions() {
+    return BlurMediaLifecycle.observerOptions(needsTextObservation());
+  }
+
+  function needsTextObservation() {
+    return profiles.some((profile) => profile.blurPii) || hasConditionalSectionRules();
+  }
+
+  function hasConditionalSectionRules() {
+    return profiles.some((profile) => profile.rules.some((rule) =>
+      rule.enabled &&
+        rule.kind === "section" &&
+        rule.condition === BlurTextConditions.SECTION_CONDITIONS.TRIGGER
+    ));
   }
 
   function createRevealControl() {
@@ -383,7 +592,9 @@
     if (!(event.target instanceof Element) || event.target.closest("#blur-extension-ui-host")) return;
 
     ensureHoveredBackgroundIsBlurred(event.target);
-    const target = event.target.closest(`.${MANAGED_TARGET_CLASS}:not(.${TEXT_FRAGMENT_CLASS})`);
+    const target = event.target.closest(
+      `.${MANAGED_TARGET_CLASS}:not(.${TEXT_FRAGMENT_CLASS}):not(.${PII_FRAGMENT_CLASS})`
+    );
     const section = event.target.closest(`.${SECTION_CLASS}`);
     if (!target && !section) return hideRevealButton();
 
@@ -559,7 +770,14 @@
     const duplicate = profile.rules.some((rule) => rule.selector === selector && rule.kind === kind);
     if (duplicate) return showToast("That selection is already in this profile");
 
-    profile.rules.push({ id: crypto.randomUUID(), selector, kind, label, enabled: true });
+    profile.rules.push({
+      id: crypto.randomUUID(),
+      selector,
+      kind,
+      label,
+      enabled: true,
+      condition: BlurTextConditions.SECTION_CONDITIONS.ALWAYS
+    });
     await chrome.storage.local.set({ [BlurCore.STORAGE_KEY]: nextState });
     showToast(kind === "section"
       ? `${matchCount} matching ${matchCount === 1 ? "section" : "sections"} added to ${profile.name}`

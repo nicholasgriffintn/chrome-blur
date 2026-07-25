@@ -363,6 +363,110 @@ textarea::placeholder {
   text-align: right;
 }
 
+.trigger-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.trigger-panel .panel-heading {
+  min-height: 62px;
+  padding-right: 86px;
+  align-items: flex-start;
+}
+
+#trigger-count {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  display: grid;
+  width: 76px;
+  height: 76px;
+  padding: 9px;
+  place-items: center;
+  border: 1px solid rgb(119 216 186 / 18%);
+  border-radius: 50%;
+  color: var(--mint);
+  font: 700 10px var(--mono);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.trigger-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 11px;
+}
+
+.trigger-tools > span {
+  margin-right: 2px;
+  color: var(--muted);
+  font: 8px var(--mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.trigger-tools button {
+  min-height: 25px;
+  padding: 3px 8px;
+  border-color: #3d514d;
+  border-radius: 999px;
+  color: #b9e6d8;
+  font-size: 9px;
+}
+
+.trigger-tools button.is-active {
+  border-color: var(--mint);
+  background: #20352f;
+  color: #d5f5eb;
+  box-shadow: inset 0 0 0 1px rgb(119 216 186 / 12%);
+}
+
+.trigger-tools button.is-active::before {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--mint);
+  content: "";
+  vertical-align: 1px;
+}
+
+.trigger-field {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.trigger-field > span {
+  color: #aeb4bc;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.trigger-field > span i {
+  color: #717883;
+  font-style: normal;
+  font-weight: 400;
+}
+
+.trigger-field textarea {
+  min-height: 43px;
+  margin-top: 0;
+}
+
+.context-field textarea {
+  min-height: 36px;
+}
+
+.trigger-help {
+  margin-top: 7px;
+  color: #777e88;
+  font-size: 9px;
+}
+
 .range {
   width: 100%;
   height: 4px;
@@ -403,6 +507,12 @@ textarea::placeholder {
 .check-row small {
   color: var(--muted);
   font-size: 10px;
+}
+
+.check-row + .check-row {
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line-soft);
 }
 
 .check-row i,
@@ -568,6 +678,30 @@ textarea::placeholder {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.rule-condition {
+  width: max-content;
+  max-width: 180px;
+  height: 25px;
+  margin-top: 3px;
+  padding: 0 27px 0 8px;
+  border-color: #3b4049;
+  border-radius: 6px;
+  background-position: right 8px center;
+  background-size: 9px auto;
+  color: #aeb4bd;
+  font: 9px var(--mono);
+}
+
+.rule-condition.is-triggered {
+  border-color: #3d665b;
+  color: var(--mint);
+}
+
+.rule-condition.is-empty-condition {
+  border-color: #85554f;
+  color: var(--danger);
 }
 
 .rule-copy strong {

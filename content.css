@@ -8,6 +8,15 @@
   will-change: filter;
 }
 
+input.blur-extension-pii-field,
+textarea.blur-extension-pii-field,
+[contenteditable].blur-extension-pii-field {
+  filter: blur(var(--blur-extension-radius)) !important;
+}
+
+input.blur-extension-pii-field.blur-extension-revealed,
+textarea.blur-extension-pii-field.blur-extension-revealed,
+[contenteditable].blur-extension-pii-field.blur-extension-revealed,
 .blur-extension-revealed {
   filter: none !important;
 }
