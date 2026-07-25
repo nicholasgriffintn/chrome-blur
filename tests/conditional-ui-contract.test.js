@@ -69,6 +69,52 @@ test("sensitive inputs have a dedicated blur rule that can outrank page field st
   assert.match(css, /filter:\s*blur\(var\(--blur-extension-radius\)\)\s*!important/);
 });
 
+test("heavy page monitoring only runs while a profile matches", () => {
+  const content = read("content.js");
+
+  assert.match(content, /let pageFeaturesActive = false/);
+  assert.match(content, /function syncPageFeatures/);
+  assert.match(content, /function activatePageFeatures/);
+  assert.match(content, /function deactivatePageFeatures/);
+  assert.match(content, /observer[?][.]disconnect/);
+});
+
+test("reapplying rules clears reveal exceptions and supports keyboard reveal", () => {
+  const content = read("content.js");
+
+  assert.match(content, /revealedTargets = new WeakSet/);
+  assert.match(content, /function resetRevealState/);
+  assert.match(content, /function handleRevealKeydown/);
+  assert.match(content, /event[.]altKey/);
+});
+
+test("matching pages periodically refresh script-populated sensitive fields", () => {
+  const content = read("content.js");
+
+  assert.match(content, /function configurePiiRefresh/);
+  assert.match(content, /setInterval[(]refreshPiiFields, 2000[)]/);
+  assert.match(content, /BlurPiiDom[.]FIELD_SELECTOR/);
+});
+
+test("popup reports invalid site patterns next to the editor", () => {
+  const popup = read("popup.html");
+  const script = read("popup.js");
+
+  assert.match(popup, /id="site-pattern-error"/);
+  assert.match(script, /BlurCore[.]getPatternError/);
+});
+
+test("popup can back up and restore all local profiles", () => {
+  const popup = read("popup.html");
+  const script = read("popup.js");
+
+  assert.match(popup, /id="export-settings"/);
+  assert.match(popup, /id="import-settings"/);
+  assert.match(script, /function exportSettings/);
+  assert.match(script, /async function importSettings/);
+  assert.match(script, /replace all current Blur profiles/);
+});
+
 test("every extension context loads text conditions before profile state", () => {
   const manifest = JSON.parse(read("manifest.json"));
   const scripts = manifest.content_scripts[0].js;

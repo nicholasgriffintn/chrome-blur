@@ -75,6 +75,36 @@ textarea:focus-visible {
   border-color: var(--coral);
 }
 
+.field-error {
+  display: block;
+  margin-top: 5px;
+  color: #ff8f84;
+  font-size: 10px;
+}
+.field-error:empty { display: none; }
+
+.backup-actions { display: flex; gap: 5px; margin-left: auto; }
+.backup-actions button,
+.backup-actions label {
+  min-height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--line, #34383d);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 9px;
+  cursor: pointer;
+}
+.backup-actions input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
 h1,
 h2,
 p {

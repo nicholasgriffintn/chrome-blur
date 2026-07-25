@@ -60,7 +60,8 @@
           </div>
           <button id="add-current-site" class="text-button" type="button">Use this site</button>
         </div>
-        <textarea id="site-patterns" rows="2" spellcheck="false" placeholder="example.com&#10;*.news.example.com"></textarea>
+        <textarea id="site-patterns" rows="2" spellcheck="false" aria-describedby="site-pattern-error" placeholder="example.com&#10;*.news.example.com"></textarea>
+        <small id="site-pattern-error" class="field-error" role="status"></small>
       </section>
 
       <section class="panel strength-panel">
@@ -77,7 +78,7 @@
         <label class="check-row">
           <span>
             <strong>Blur every image and video</strong>
-            <small>Reveal individual media from its hover button</small>
+            <small>Use its hover button, or focus it and press Alt+R, to reveal</small>
           </span>
           <input id="blur-media" type="checkbox">
           <i aria-hidden="true"></i>
@@ -166,6 +167,13 @@
         </svg>
       </div>
       <p><strong>Local by design.</strong> No account, tracking, ads or licence key.</p>
+      <div class="backup-actions">
+        <button id="export-settings" type="button">Backup</button>
+        <label>
+          Restore
+          <input id="import-settings" type="file" accept="application/json">
+        </label>
+      </div>
       <span id="save-status" role="status"></span>
     </footer>
   </main>

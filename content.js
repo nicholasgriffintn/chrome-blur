@@ -30,12 +30,15 @@
   let observer;
   let picker;
   let revealControl;
+  let pageFeaturesActive = false;
+  let pageFeatureController;
+  let piiRefreshTimer;
   let pendingRoots = new Set();
   let applyFrame;
   let currentDocumentUrl = location.href;
   const registry = BlurModel.createRegistry();
-  const revealedTargets = new WeakSet();
-  const revealedSections = new WeakSet();
+  let revealedTargets = new WeakSet();
+  let revealedSections = new WeakSet();
 
   initialise().catch(reportError);
 
@@ -44,19 +47,13 @@
     state = BlurCore.normaliseState(stored[BlurCore.STORAGE_KEY]);
     profiles = BlurCore.matchingProfiles(state, location.href);
 
-    applyProfiles(document);
-    observePage();
-    createRevealControl();
+    syncPageFeatures();
     reportStatus();
 
     chrome.storage.onChanged.addListener(handleStorageChange);
     chrome.runtime.onMessage.addListener(handleMessage);
-    document.addEventListener("pointerover", handleMediaPointerOver, true);
-    document.addEventListener("pointerout", handleMediaPointerOut, true);
-    document.addEventListener("input", handleSensitiveFieldInput, true);
     window.addEventListener("popstate", refreshProfilesForCurrentUrl);
     window.addEventListener("hashchange", refreshProfilesForCurrentUrl);
-    window.addEventListener("load", reapplyAll, { once: true });
     window.navigation?.addEventListener("navigatesuccess", refreshProfilesForCurrentUrl);
   }
 
@@ -64,7 +61,8 @@
     if (areaName !== "local" || !changes[BlurCore.STORAGE_KEY]) return;
     state = BlurCore.normaliseState(changes[BlurCore.STORAGE_KEY].newValue);
     profiles = BlurCore.matchingProfiles(state, location.href);
-    reapplyAll();
+    const transitioned = syncPageFeatures();
+    if (pageFeaturesActive && !transitioned) reapplyAll();
     reportStatus();
   }
 
@@ -100,11 +98,54 @@
     observer.observe(document, currentObserverOptions());
   }
 
+  function syncPageFeatures() {
+    const shouldBeActive = profiles.length > 0;
+    if (shouldBeActive === pageFeaturesActive) return false;
+    if (shouldBeActive) activatePageFeatures();
+    else deactivatePageFeatures();
+    return true;
+  }
+
+  function activatePageFeatures() {
+    pageFeaturesActive = true;
+    pageFeatureController = new AbortController();
+    const signal = pageFeatureController.signal;
+    applyProfiles(document);
+    observePage();
+    createRevealControl();
+    configurePiiRefresh();
+    document.addEventListener("pointerover", handleMediaPointerOver, { capture: true, signal });
+    document.addEventListener("pointerout", handleMediaPointerOut, { capture: true, signal });
+    document.addEventListener("input", handleSensitiveFieldInput, { capture: true, signal });
+    document.addEventListener("keydown", handleRevealKeydown, { capture: true, signal });
+    document.addEventListener("visibilitychange", refreshPiiFields, { signal });
+    window.addEventListener("load", reapplyAll, { once: true, signal });
+  }
+
+  function deactivatePageFeatures() {
+    pageFeaturesActive = false;
+    pageFeatureController?.abort();
+    pageFeatureController = undefined;
+    observer?.disconnect();
+    observer = undefined;
+    clearInterval(piiRefreshTimer);
+    piiRefreshTimer = undefined;
+    if (applyFrame) cancelAnimationFrame(applyFrame);
+    applyFrame = undefined;
+    pendingRoots.clear();
+    hideRevealButton();
+    revealControl?.host.remove();
+    revealControl = undefined;
+    resetRevealState();
+    clearManagedEffects();
+  }
+
   function refreshProfilesForCurrentUrl() {
     if (location.href === currentDocumentUrl) return false;
     currentDocumentUrl = location.href;
     profiles = BlurCore.matchingProfiles(state, currentDocumentUrl);
-    reapplyAll();
+    const transitioned = syncPageFeatures();
+    if (pageFeaturesActive && !transitioned) reapplyAll();
     reportStatus();
     return true;
   }
@@ -120,13 +161,17 @@
   }
 
   function reapplyAll() {
+    if (!pageFeaturesActive) return;
     if (applyFrame) cancelAnimationFrame(applyFrame);
     applyFrame = undefined;
     pendingRoots.clear();
+    resetRevealState();
+    hideRevealButton();
     withObserverPaused(() => {
       clearManagedEffects();
       applyProfiles(document);
     });
+    configurePiiRefresh();
   }
 
   function applyProfiles(root) {
@@ -318,6 +363,60 @@
     ));
   }
 
+  function configurePiiRefresh() {
+    clearInterval(piiRefreshTimer);
+    piiRefreshTimer = undefined;
+    if (!pageFeaturesActive || !profiles.some((profile) => profile.blurPii)) return;
+    piiRefreshTimer = setInterval(refreshPiiFields, 2000);
+  }
+
+  function refreshPiiFields() {
+    if (
+      !pageFeaturesActive
+      || document.hidden
+      || !profiles.some((profile) => profile.blurPii)
+    ) return;
+    const piiProfiles = profiles.filter((profile) => profile.blurPii);
+    withObserverPaused(() => {
+      document.querySelectorAll(BlurPiiDom.FIELD_SELECTOR)
+        .forEach((field) => updatePiiField(field, piiProfiles));
+    });
+  }
+
+  function handleRevealKeydown(event) {
+    if (!event.altKey || event.key.toLowerCase() !== "r") return;
+    if (!(event.target instanceof Element)) return;
+    const target = event.target.closest(`.${MANAGED_TARGET_CLASS}`);
+    const section = event.target.closest(`.${SECTION_CLASS}`);
+    if (event.shiftKey && section) {
+      event.preventDefault();
+      toggleSectionReveal(section);
+      return;
+    }
+    if (!target) return;
+    event.preventDefault();
+    toggleTargetReveal(target);
+  }
+
+  function toggleTargetReveal(target) {
+    if (revealedTargets.has(target)) revealedTargets.delete(target);
+    else revealedTargets.add(target);
+    updateTargetAppearance(target);
+    renderRevealControl();
+  }
+
+  function toggleSectionReveal(section) {
+    if (revealedSections.has(section)) revealedSections.delete(section);
+    else revealedSections.add(section);
+    registry.targetsForSection(section).forEach(updateTargetAppearance);
+    renderRevealControl();
+  }
+
+  function resetRevealState() {
+    revealedTargets = new WeakSet();
+    revealedSections = new WeakSet();
+  }
+
   function blurSectionRuleTargets(scope, boundary, rule, radius, sourceId) {
     const targets = rule.targetSelectors.length
       ? BlurSectionTargets.resolve(boundary, rule.targetSelectors)
@@ -382,6 +481,7 @@
       }
 
       revealedTargets.delete(target);
+      restoreKeyboardReveal(target);
       target.classList.remove(
         MANAGED_TARGET_CLASS,
         BACKGROUND_TARGET_CLASS,
@@ -410,6 +510,7 @@
       registry.addTarget(element, sourceId, radius);
     }
     element.classList.add(MANAGED_TARGET_CLASS);
+    enableKeyboardReveal(element);
     element.style.setProperty("--blur-extension-radius", `${registry.radiusFor(element)}px`);
     updateTargetAppearance(element);
   }
@@ -428,6 +529,7 @@
     }
 
     revealedTargets.delete(target);
+    restoreKeyboardReveal(target);
     target.classList.remove(MANAGED_TARGET_CLASS, REVEALED_CLASS);
     target.style.removeProperty("--blur-extension-radius");
   }
@@ -441,6 +543,7 @@
 
   function clearManagedEffects() {
     document.querySelectorAll(`.${MANAGED_TARGET_CLASS}`).forEach((element) => {
+      restoreKeyboardReveal(element);
       element.classList.remove(
         MANAGED_TARGET_CLASS,
         REVEALED_CLASS,
@@ -460,6 +563,21 @@
     });
     BlurPiiDom.clear(document);
     registry.clear();
+  }
+
+  function enableKeyboardReveal(element) {
+    if (
+      element.hasAttribute("tabindex")
+      || !element.matches(`${MEDIA_SELECTOR}, .${BACKGROUND_TARGET_CLASS}`)
+    ) return;
+    element.dataset.blurExtensionAddedTabindex = "true";
+    element.tabIndex = 0;
+  }
+
+  function restoreKeyboardReveal(element) {
+    if (element.dataset.blurExtensionAddedTabindex !== "true") return;
+    delete element.dataset.blurExtensionAddedTabindex;
+    element.removeAttribute("tabindex");
   }
 
   function findWithin(root, selector) {
@@ -569,30 +687,19 @@
     targetButton.addEventListener("click", () => {
       const target = revealControl?.target;
       if (!target) return;
-      if (revealedTargets.has(target)) {
-        revealedTargets.delete(target);
-      } else {
-        revealedTargets.add(target);
-      }
-      updateTargetAppearance(target);
-      renderRevealControl();
+      toggleTargetReveal(target);
     });
 
     sectionButton.addEventListener("click", () => {
       const section = revealControl?.section;
       if (!section) return;
-      if (revealedSections.has(section)) {
-        revealedSections.delete(section);
-      } else {
-        revealedSections.add(section);
-      }
-      registry.targetsForSection(section).forEach(updateTargetAppearance);
-      renderRevealControl();
+      toggleSectionReveal(section);
     });
 
     revealControl = { host, panel, targetButton, sectionButton, target: null, section: null };
-    window.addEventListener("scroll", () => hideRevealButton(), { passive: true });
-    window.addEventListener("resize", () => hideRevealButton(), { passive: true });
+    const signal = pageFeatureController.signal;
+    window.addEventListener("scroll", hideRevealButton, { passive: true, signal });
+    window.addEventListener("resize", hideRevealButton, { passive: true, signal });
   }
 
   function handleMediaPointerOver(event) {

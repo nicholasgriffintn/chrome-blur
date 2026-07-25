@@ -16,6 +16,7 @@
     profileEnabled: document.querySelector("#profile-enabled"),
     deleteProfile: document.querySelector("#delete-profile"),
     sitePatterns: document.querySelector("#site-patterns"),
+    sitePatternError: document.querySelector("#site-pattern-error"),
     addCurrentSite: document.querySelector("#add-current-site"),
     blurAmount: document.querySelector("#blur-amount"),
     blurOutput: document.querySelector("#blur-output"),
@@ -27,6 +28,8 @@
     rules: document.querySelector("#rules"),
     ruleCount: document.querySelector("#rule-count"),
     clearRules: document.querySelector("#clear-rules"),
+    exportSettings: document.querySelector("#export-settings"),
+    importSettings: document.querySelector("#import-settings"),
     saveStatus: document.querySelector("#save-status"),
     ruleTemplate: document.querySelector("#rule-template")
   };
@@ -66,6 +69,7 @@
 
     elements.sitePatterns.addEventListener("input", () => {
       activeProfile().sitePatterns = BlurCore.parsePatterns(elements.sitePatterns.value);
+      renderPatternError();
       renderStatus();
       queueSave();
     });
@@ -107,6 +111,8 @@
     document.querySelector("#rename-profile").addEventListener("click", renameProfile);
     document.querySelector("#delete-profile").addEventListener("click", deleteProfile);
     document.querySelector("#clear-rules").addEventListener("click", clearRules);
+    elements.exportSettings.addEventListener("click", exportSettings);
+    elements.importSettings.addEventListener("change", importSettings);
 
     document.querySelectorAll("[data-picker]").forEach((button) => {
       button.addEventListener("click", () => startPicker(button.dataset.picker));
@@ -127,6 +133,7 @@
       return option;
     }));
     elements.sitePatterns.value = profile.sitePatterns.join("\n");
+    renderPatternError();
     elements.blurAmount.value = String(profile.blurAmount);
     elements.blurOutput.textContent = `${profile.blurAmount}%`;
     elements.blurMedia.checked = profile.blurMedia;
@@ -152,6 +159,15 @@
     document.querySelectorAll("[data-picker]").forEach((button) => {
       button.disabled = !currentUrl || !profile.enabled;
     });
+  }
+
+  function renderPatternError() {
+    const error = elements.sitePatterns.value
+      .split(/[\n,]/)
+      .map((pattern) => BlurCore.getPatternError(pattern))
+      .find(Boolean) ?? "";
+    elements.sitePatternError.textContent = error;
+    elements.sitePatterns.setAttribute("aria-invalid", String(Boolean(error)));
   }
 
   function renderRules() {
@@ -325,6 +341,36 @@
     profile.rules = [];
     renderRules();
     queueSave();
+  }
+
+  function exportSettings() {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "blur-settings.json";
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importSettings(event) {
+    const [file] = event.target.files;
+    event.target.value = "";
+    if (!file) return;
+    try {
+      if (file.size > 10 * 1024 * 1024) throw new Error("Settings file is too large");
+      const imported = JSON.parse(await file.text());
+      if (!imported || !Array.isArray(imported.profiles) || !imported.profiles.length) {
+        throw new Error("Choose a Blur settings backup");
+      }
+      if (!confirm("Import this backup and replace all current Blur profiles?")) return;
+      state = BlurCore.normaliseState(imported);
+      render();
+      await save();
+    } catch (error) {
+      showError(error);
+    }
   }
 
   async function startPicker(kind) {

@@ -116,6 +116,14 @@ test("supports host paths and complete URL globs", () => {
   );
 });
 
+test("rejects malformed or unsafe site patterns", () => {
+  assert.equal(core.getPatternError("https://example.com/private/*"), "");
+  assert.equal(core.getPatternError("*.example.com"), "");
+  assert.match(core.getPatternError("javascript://example.com"), /HTTP/);
+  assert.match(core.getPatternError("example .com"), /spaces/);
+  assert.deepEqual(Array.from(core.parsePatterns("example.com\nexample .com\njavascript://x")), ["example.com"]);
+});
+
 test("returns only active profiles matching a web URL", () => {
   const state = {
     enabled: true,

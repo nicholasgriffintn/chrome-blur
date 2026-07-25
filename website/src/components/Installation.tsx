@@ -1,4 +1,5 @@
 import { DownloadButton } from "./DownloadButton.tsx";
+import { ReleaseProvenance } from "./ReleaseProvenance.tsx";
 
 const steps = [
   {
@@ -30,6 +31,7 @@ export function Installation() {
           directly from the folder on your computer.
         </p>
         <DownloadButton />
+        <ReleaseProvenance />
       </div>
       <ol className="steps">
         {steps.map((step, index) => (
