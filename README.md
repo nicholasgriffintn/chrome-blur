@@ -94,6 +94,16 @@ pnpm check
 pnpm test
 ```
 
+Build and validate the website:
+
+```sh
+pnpm --dir website install
+pnpm --dir website check
+```
+
+The website build packages the current extension as `blur.zip` and includes it
+in the generated static site.
+
 To test a local checkout:
 
 1. Open `chrome://extensions`.

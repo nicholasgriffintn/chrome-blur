@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="background" x1="16" y1="10" x2="110" y2="120" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#252A31"/>
+      <stop offset="1" stop-color="#101216"/>
+    </linearGradient>
+    <filter id="soft-blur" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#background)"/>
+  <rect x="18" y="19" width="92" height="90" rx="19" fill="none" stroke="#3D434D" stroke-width="3"/>
+  <circle cx="44" cy="49" r="13" fill="#FF6B4A" filter="url(#soft-blur)" opacity=".75"/>
+  <circle cx="44" cy="49" r="8" fill="#FF7A5B"/>
+  <path d="M31 83c9-16 19-23 30-20 9 2 12 13 20 13 6 0 11-5 16-14v28H31z" fill="#F3EFE6" filter="url(#soft-blur)" opacity=".45"/>
+  <path d="M31 86c9-16 19-23 30-20 9 2 12 13 20 13 6 0 11-5 16-14v25H31z" fill="#F3EFE6" opacity=".92"/>
+  <path d="M30 100h68" stroke="#77D8BA" stroke-width="5" stroke-linecap="round"/>
+</svg>
