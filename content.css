@@ -1,0 +1,19 @@
+.blur-extension-target,
+.blur-extension-text-fragment {
+  --blur-extension-radius: 16px;
+  filter: blur(var(--blur-extension-radius)) !important;
+}
+
+.blur-extension-target {
+  will-change: filter;
+}
+
+.blur-extension-revealed {
+  filter: none !important;
+}
+
+.blur-extension-picker-candidate {
+  outline: 3px solid #ff6b4a !important;
+  outline-offset: 3px !important;
+  cursor: crosshair !important;
+}

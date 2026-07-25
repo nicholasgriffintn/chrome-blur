@@ -1,0 +1,9 @@
+.claude
+node_modules
+.wrangler
+*.zip
+*.tsbuildinfo
+website/dist/
+website/dist
+*.tsbuildinfo
+*.zip

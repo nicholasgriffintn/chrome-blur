@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Blur</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+  <main class="app-shell">
+    <header class="hero">
+      <div class="brand-row">
+        <div class="brand">
+          <img src="icons/icon-48.png" alt="" width="38" height="38">
+          <div>
+            <h1>blur<span>.</span></h1>
+            <p>Quiet the page. Keep the shape.</p>
+          </div>
+        </div>
+
+        <label class="master-switch" title="Enable Blur">
+          <input id="global-enabled" type="checkbox">
+          <span aria-hidden="true"></span>
+          <strong id="global-label">On</strong>
+        </label>
+      </div>
+
+      <div class="site-line">
+        <span class="pulse" aria-hidden="true"></span>
+        <span id="current-site">No website open</span>
+        <span id="site-status">not covered</span>
+      </div>
+    </header>
+
+    <section class="workspace">
+      <div class="profile-heading">
+        <label for="profile-select">Profile</label>
+        <div class="profile-actions">
+          <button id="new-profile" type="button">New</button>
+          <button id="rename-profile" type="button">Rename</button>
+          <button id="delete-profile" class="quiet-danger" type="button">Delete</button>
+        </div>
+      </div>
+
+      <div class="profile-control">
+        <select id="profile-select" aria-label="Active profile"></select>
+        <label class="profile-toggle" title="Enable this profile">
+          <input id="profile-enabled" type="checkbox">
+          <span aria-hidden="true"></span>
+        </label>
+      </div>
+
+      <section class="panel sites-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Where it runs</h2>
+            <p>One domain or URL pattern per line</p>
+          </div>
+          <button id="add-current-site" class="text-button" type="button">Use this site</button>
+        </div>
+        <textarea id="site-patterns" rows="2" spellcheck="false" placeholder="example.com&#10;*.news.example.com"></textarea>
+      </section>
+
+      <section class="panel strength-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Default treatment</h2>
+            <p>Applied before the page finishes drawing</p>
+          </div>
+          <output id="blur-output" for="blur-amount">65%</output>
+        </div>
+
+        <input id="blur-amount" class="range" type="range" min="0" max="100" step="5">
+
+        <label class="check-row">
+          <span>
+            <strong>Blur every image and video</strong>
+            <small>Reveal individual media from its hover button</small>
+          </span>
+          <input id="blur-media" type="checkbox">
+          <i aria-hidden="true"></i>
+        </label>
+      </section>
+
+      <section class="selection-panel">
+        <div class="selection-copy">
+          <span class="eyebrow">Teach this profile</span>
+          <h2>Select content on the page</h2>
+          <p>Elements blur once. Sections blur every matching card type, including its text, images and videos.</p>
+        </div>
+        <div class="selection-actions">
+          <button class="picker-button" data-picker="element" type="button">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 4h6M4 4v6M20 4h-6M20 4v6M4 20h6M4 20v-6M20 20h-6M20 20v-6"></path>
+            </svg>
+            Pick element
+          </button>
+          <button class="picker-button section-button" data-picker="section" type="button">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M5 5h14v14H5zM8 9h8M8 12h5M8 15h7"></path>
+            </svg>
+            Pick section
+          </button>
+        </div>
+      </section>
+
+      <section class="rules-section">
+        <div class="rules-heading">
+          <div>
+            <h2>Remembered selections</h2>
+            <span id="rule-count">0</span>
+          </div>
+          <button id="clear-rules" class="text-button quiet-danger" type="button">Clear all</button>
+        </div>
+        <div id="rules" class="rules"></div>
+      </section>
+    </section>
+
+    <footer>
+      <div class="privacy-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3 5 6v5c0 4.6 2.8 8.1 7 10 4.2-1.9 7-5.4 7-10V6z"></path>
+          <path d="m9 12 2 2 4-5"></path>
+        </svg>
+      </div>
+      <p><strong>Local by design.</strong> No account, tracking, ads or licence key.</p>
+      <span id="save-status" role="status"></span>
+    </footer>
+  </main>
+
+  <template id="rule-template">
+    <article class="rule">
+      <label class="rule-switch">
+        <input class="rule-enabled" type="checkbox">
+        <span aria-hidden="true"></span>
+      </label>
+      <span class="rule-kind"></span>
+      <span class="rule-copy">
+        <strong class="rule-label"></strong>
+        <code class="rule-selector"></code>
+      </span>
+      <button class="rule-delete" type="button" aria-label="Delete selection">×</button>
+    </article>
+  </template>
+
+  <script src="lib/state.js"></script>
+  <script src="popup.js"></script>
+</body>
+
+</html>
