@@ -2,123 +2,63 @@
 
 Blur distracting or sensitive page content before it reaches your screen share, recording or line of sight.
 
-![Blur screenshot](/screenshots/extension.png)
+![Blur selectively obscuring visual detail while preserving page structure](promos/marquee-1400x560.png)
 
-## Features
+## What it does
 
 - Blur every image and video on selected websites.
-- Auto-blur sensitive data in page text, editable regions and labelled values.
+- Detect and blur common sensitive data in page text and form fields.
 - Keep separate profiles for different sites or tasks.
-- Tune blur strength from 0–100%.
-- Pick individual page elements and remember their CSS selectors.
-- Pick a section to find and blur its text, images, videos and form controls.
-- Make selected sections conditional with focused spoiler, violence and result filters.
-- Reveal an individual blurred image, video, CSS background or remembered section from its hover controls.
-- Reapply remembered rules after reloads and to content added by dynamic websites.
+- Remember individual elements or repeated page sections.
+- Blur saved sections only when spoiler, violence, result or custom terms match.
+- Temporarily reveal blurred content from its hover controls.
 - Pause one profile or the whole extension.
 
-## Use Blur
+![Blur popup with a site profile and blur controls](screenshots/screenshot.png)
+
+## How to use it
 
 1. Install Blur and open a normal website.
 2. Open the extension popup.
 3. Select **Use this site** to add the current domain to the default profile.
 4. Adjust the blur strength and choose whether to blur media and sensitive data.
 5. Select **Pick element** or **Pick section**, then choose content on the page.
-   In section mode, enable **Draw area** in the top banner to drag around content
-   that is difficult to reach through the DOM hierarchy.
-6. For conditional sections, enable filter packs or add custom triggers, then change the remembered section from **Always blur** to **On conditional filters**.
+6. Press `↑` or `↓` while picking a section to change its scope, or use **Draw area** for content that is difficult to select.
+7. To make a saved section conditional, enable a filter pack or add trigger terms, then choose **Blur on trigger words** for that selection.
 
-The popup closes while picking. In section mode, Blur compares nearby ancestors using repeated data attributes, roles, classes and parent structures, then applies the rule to **every card sharing the inferred component type**. Press `↑` for a broader parent or `↓` for a narrower child. Alternatively, enable **Draw area** in the top banner and drag around the text, media and controls that belong together. Blur uses all enclosed content to infer their shared section, then remembers precise paths to only those drawn parts inside every matching card. Drawing over a previously saved whole-card rule narrows that rule to the drawn content. Press `Esc` to cancel selection. Blur saves changes automatically.
+Profiles accept one site pattern per line. Examples include `example.com`, `*.example.com`, `example.com/account/*`, a complete URL pattern, or `*` for every HTTP and HTTPS site. Settings save automatically.
 
-## Profiles and site patterns
+Select **Backup** to download the current profiles as `blur-settings.json`. Importing a backup replaces the current settings.
 
-Each profile contains its own site patterns, strength and remembered selections. Enter one pattern per line:
-
-- `example.com` — this exact hostname
-- `*.example.com` — the hostname and all its subdomains
-- `example.com/account/*` — matching paths on the hostname
-- `https://example.com/private/*` — a complete URL pattern
-- `*` — every HTTP and HTTPS website
-
-All enabled profiles matching the current page are applied. Where rules overlap, Blur uses the stronger setting.
-
-**Auto-blur sensitive data** is enabled by default for every profile. It detects email addresses, phone numbers, Luhn-valid payment cards, checksum-valid IBANs, public IPv4 addresses, common identity-number formats, strong postal-address patterns and explicitly labelled personal details. Associated labels, ARIA references, definition lists, tables, contenteditable regions and common label/value layouts provide context for ambiguous values such as names, dates, credentials and account numbers.
-
-## How section selection works
-
-An element selection blurs the selected node as one visual object. A section selection walks the selected container, wraps visible text fragments and marks its images, videos, CSS backgrounds and form controls separately. A `MutationObserver` applies the same treatment to content inserted later by single-page applications.
-
-Blur tracks why each target is blurred. If an image is covered by both the profile’s media default and a section rule, **Reveal section** temporarily overrides both sources for every item in that section. **Reveal image** still controls media independently while its section remains blurred.
-
-Each profile has three optional filter packs plus broad custom triggers. **Spoilers** requires entertainment or a configured title or character near ambiguous language. **Results** looks for score patterns, full-time markers, named opponents and sports or configured team context. **Violence** deliberately accepts broader matches, including acute disasters, evacuations and human-targeted threats, because missing sensitive material is worse than an occasional false positive.
-
-Matching scans visible text, headings, links, metadata, ARIA labels and image `alt` descriptions. It is case-insensitive, recognises simple plural variants and normalises curly apostrophes, hyphens and Unicode dashes. Add show, character or team names to the optional context list to make ambiguous matches more precise.
-
-Blur stores the generated CSS selector, not the selected text or media. IDs and stable class names are preferred, with a short structural selector as a fallback.
-
-## Performance
-
-The content script runs at `document_start`, reads matching profiles and installs blur classes before most page content is parsed. This avoids the usual visible flash on normal navigations. Chrome storage and page execution are asynchronous, so an absolute zero-frame guarantee is not possible on every website.
-
-New and replaced images or videos are guarded synchronously, including responsive `src`/`srcset` updates and class replacement by page frameworks. Sensitive data in newly inserted text, editable regions and changed fields is guarded in the same mutation pass. Conditional sections are reevaluated when text, ARIA labels or image descriptions change. Text-node observation is enabled only while sensitive-data protection or a conditional section rule is active. Heavier section text and background detection is batched into animation frames and limited to newly inserted DOM branches. For whole-page defaults, Blur pre-scans likely CSS background candidates and confirms them with computed styles.
-
-## Privacy
-
-Blur has no account, licence key, analytics, telemetry, tracking, advertising, remote scripts or external API calls. It stores settings only in `chrome.storage.local`.
-
-Stored settings include:
-
-- Profile names and enabled states
-- Site and URL patterns
-- Blur strength
-- Whether media and sensitive-data protection are enabled
-- Enabled filter packs, custom triggers and optional context names
-- CSS selectors and short labels describing remembered selections
-
-Detection runs inside the current page. Page text and field values are not copied into extension storage, logged, collected or transmitted.
-
-## Permissions
-
-- **Access to all sites** lets the document-start content script apply profiles on websites you configure. Profiles with no matching site pattern do nothing.
-- **Storage** keeps profiles and selectors locally.
-- **Active tab** lets the popup start element or section selection on the current page.
-
-Chrome prevents extensions from changing protected pages such as `chrome://` URLs and the Chrome Web Store.
-
-## Development
-
-Blur is a dependency-free Manifest V3 extension with no build step.
-
-Run its checks:
-
-```sh
-pnpm check
-pnpm test
-```
-
-Build and validate the website:
-
-```sh
-pnpm --dir website install
-pnpm --dir website check
-```
-
-The website build packages the current extension as `blur.zip` and includes it
-in the generated static site.
-
-To test a local checkout:
+## Install from source
 
 1. Open `chrome://extensions`.
 2. Enable **Developer mode**.
 3. Select **Load unpacked** and choose this repository.
-4. Reload an already-open website once after the first install.
+4. Reload an already-open website after the first installation.
+
+## Privacy
+
+Blur stores profiles, site patterns, blur settings, trigger terms, selector labels and selectors in Chrome's local extension storage. Backups contain the same settings. It does not store the page text, field values or media it checks.
+
+Detection runs inside the current tab. No page content or settings are transmitted, and the extension has no accounts, analytics, advertising, remote scripts or external API calls. Access to all sites lets Blur apply configured profiles early enough to reduce visible flashes; unmatched sites receive no blur treatment.
+
+Chrome prevents extensions from changing protected pages such as `chrome://` URLs and the Chrome Web Store.
 
 ## Limitations
 
 - Websites that replace IDs or class names between visits may require a selection to be recreated.
 - Cross-origin iframe contents are not blurred.
-- A CSS background attached to a container cannot be filtered separately from that container’s foreground content. Blur therefore treats the element as one visual target.
-- CSS backgrounds with no inline style, semantic class or role may only be detected when hovered or selected as part of a section.
-- Page-level CSS filters can affect how a nested reveal appears.
-- Unlabelled names cannot be identified reliably without a language model, so free-form occurrences may not be detected.
-- Sensitive-data matching favours precision, but unusual or country-specific formats can still produce false negatives.
+- Sensitive-data and conditional matching can miss unusual formats or produce false positives.
+- Chrome storage and page execution are asynchronous, so a brief flash of unblurred content remains possible.
+
+## Development
+
+Blur is a dependency-free Manifest V3 extension with no build step.
+
+```sh
+pnpm check
+pnpm test
+pnpm --dir website install
+pnpm --dir website check
+```

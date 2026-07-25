@@ -8,3 +8,4 @@ website/dist
 website/public/release.json
 *.tsbuildinfo
 *.zip
+.DS_Store
