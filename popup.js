@@ -177,7 +177,11 @@
       const enabled = row.querySelector(".rule-enabled");
       enabled.checked = rule.enabled;
       row.classList.toggle("is-disabled", !rule.enabled);
-      row.querySelector(".rule-kind").textContent = rule.kind === "section" ? "Section" : "Element";
+      row.querySelector(".rule-kind").textContent = rule.kind === "section"
+        ? rule.targetSelectors.length
+          ? "Drawn section"
+          : "Section"
+        : "Element";
       row.querySelector(".rule-label").textContent = rule.label;
       row.querySelector(".rule-selector").textContent = rule.selector;
       const condition = row.querySelector(".rule-condition");
@@ -224,7 +228,8 @@
         ) {
           showStatus("Enable a filter or add a custom trigger");
         }
-        queueSave();
+        clearTimeout(saveTimer);
+        save().catch(showError);
       });
       row.querySelector(".rule-delete").addEventListener("click", () => {
         activeProfile().rules.splice(index, 1);

@@ -217,16 +217,22 @@
   }
 
   function applySectionRule(scope, boundary, profile, rule, radius, sourceId) {
-    if (rule.condition !== BlurTextConditions.SECTION_CONDITIONS.TRIGGER) {
-      blurSection(scope, radius, sourceId, boundary);
-      return;
-    }
-
-    if (BlurTextConditions.shouldBlurSection(boundary, rule.condition, profile)) {
-      blurSection(boundary, radius, sourceId, boundary);
+    if (sectionRuleMatchesCondition(boundary, profile, rule)) {
+      const blurScope = rule.condition === BlurTextConditions.SECTION_CONDITIONS.TRIGGER
+        ? boundary
+        : scope;
+      blurSectionRuleTargets(blurScope, boundary, rule, radius, sourceId);
     } else {
       unblurSectionSource(boundary, sourceId);
     }
+  }
+
+  function sectionRuleMatchesCondition(boundary, profile, rule) {
+    if (rule.condition !== BlurTextConditions.SECTION_CONDITIONS.TRIGGER) return true;
+
+    return BlurSectionTargets.some(boundary, rule.targetSelectors, (target) =>
+      BlurTextConditions.shouldBlurSection(target, rule.condition, profile)
+    );
   }
 
   function guardNativeMediaTargets(targets) {
@@ -246,16 +252,10 @@
 
           if (rule.kind === "section") {
             const boundary = safeClosest(target, rule.selector);
-            if (
-              !boundary ||
-              !BlurTextConditions.shouldBlurSection(
-                boundary,
-                rule.condition,
-                profile
-              )
-            ) {
+            if (!boundary || !sectionRuleMatchesCondition(boundary, profile, rule)) {
               continue;
             }
+            if (!BlurSectionTargets.contains(boundary, target, rule.targetSelectors)) continue;
             boundary.classList.add(SECTION_CLASS);
             markTarget(target, radius, sourceId, boundary);
           } else if (safeClosest(target, rule.selector) === target) {
@@ -316,6 +316,13 @@
       event.target,
       profiles.filter((profile) => profile.blurPii)
     ));
+  }
+
+  function blurSectionRuleTargets(scope, boundary, rule, radius, sourceId) {
+    const targets = rule.targetSelectors.length
+      ? BlurSectionTargets.resolve(boundary, rule.targetSelectors)
+      : [scope];
+    targets.forEach((target) => blurSection(target, radius, sourceId, boundary));
   }
 
   function blurSection(scope, radius, sourceId, boundary) {
@@ -686,14 +693,20 @@
     const bar = document.createElement("div");
     const style = document.createElement("style");
     const action = kind === "section" ? "section" : "element";
+    const message = document.createElement("span");
+    const drawBox = document.createElement("div");
+    const drawButton = action === "section" ? document.createElement("button") : null;
 
     style.textContent = `
       :host { all: initial; }
-      div {
+      .banner {
         position: fixed;
         z-index: 2147483647;
         top: 16px;
         left: 50%;
+        display: flex;
+        align-items: center;
+        gap: 10px;
         transform: translateX(-50%);
         max-width: calc(100vw - 32px);
         padding: 10px 14px;
@@ -704,22 +717,64 @@
         color: #f8f4ed;
         font: 600 13px/1.3 "Avenir Next", "Century Gothic", sans-serif;
       }
+      .message { white-space: nowrap; }
+      button {
+        min-height: 28px;
+        padding: 4px 9px;
+        border: 1px solid #ff8b70;
+        border-radius: 6px;
+        background: rgba(255,107,74,.1);
+        color: #ffad9a;
+        cursor: pointer;
+        font: 700 11px/1.2 "Avenir Next", "Century Gothic", sans-serif;
+      }
+      button:hover,
+      button[aria-pressed="true"] {
+        background: #ff6b4a;
+        color: #111317;
+      }
       kbd {
-        margin-left: 10px;
         padding: 2px 5px;
         border: 1px solid #555a62;
         border-radius: 4px;
         color: #b8bdc6;
         font: 11px/1.2 ui-monospace, monospace;
       }
+      .draw-box {
+        position: fixed;
+        z-index: 2147483646;
+        display: none;
+        border: 2px solid #ff6b4a;
+        border-radius: 4px;
+        background: rgba(255,107,74,.12);
+        box-shadow: 0 0 0 1px rgba(17,19,23,.35), 0 8px 28px rgba(0,0,0,.18);
+        pointer-events: none;
+      }
+      .draw-box[data-visible="true"] { display: block; }
+      @media (max-width: 620px) {
+        .banner { flex-wrap: wrap; justify-content: center; width: calc(100vw - 32px); }
+        .message { flex-basis: 100%; text-align: center; white-space: normal; }
+      }
     `;
-    bar.append(action === "section"
-      ? "Choose a card type · all matches · ↑ broader · ↓ narrower"
-      : "Choose an element to blur");
+    bar.className = "banner";
+    message.className = "message";
+    drawBox.className = "draw-box";
+    bar.append(message);
+    if (drawButton) {
+      drawButton.type = "button";
+      drawButton.textContent = "Draw area";
+      drawButton.setAttribute("aria-pressed", "false");
+      drawButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setPickerDrawMode(!picker?.drawMode);
+      });
+      bar.append(drawButton);
+    }
     const key = document.createElement("kbd");
     key.textContent = "Esc";
     bar.append(key);
-    shadow.append(style, bar);
+    shadow.append(style, drawBox, bar);
     appendWhenReady(host);
 
     picker = {
@@ -728,15 +783,31 @@
       host,
       candidate: null,
       pointerTarget: null,
-      highlighted: new Set()
+      highlighted: new Set(),
+      message,
+      drawButton,
+      drawBox,
+      drawMode: false,
+      drawing: false,
+      drawStart: null,
+      targetSelectors: []
     };
+    updatePickerBanner();
+    document.addEventListener("pointerdown", handlePickerPointerDown, true);
     document.addEventListener("pointermove", handlePickerMove, true);
+    document.addEventListener("pointerup", handlePickerPointerUp, true);
+    document.addEventListener("pointercancel", cancelPickerDraw, true);
     document.addEventListener("click", handlePickerClick, true);
     document.addEventListener("keydown", handlePickerKeydown, true);
   }
 
   function handlePickerMove(event) {
-    if (!picker || !(event.target instanceof Element)) return;
+    if (!picker) return;
+    if (picker.drawMode) {
+      if (picker.drawing) updatePickerDrawBox(event);
+      return;
+    }
+    if (!(event.target instanceof Element)) return;
     if (event.target.closest("#blur-extension-picker-host, #blur-extension-ui-host")) return;
     picker.pointerTarget = event.target;
     setPickerCandidate(
@@ -746,17 +817,98 @@
     );
   }
 
-  async function handlePickerClick(event) {
-    if (!picker?.candidate) return;
+  function handlePickerPointerDown(event) {
+    if (!picker?.drawMode || event.button !== 0 || event.isPrimary === false) return;
+    if (event.target instanceof Element &&
+      event.target.closest("#blur-extension-picker-host, #blur-extension-ui-host")) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    clearPickerHighlights();
+    picker.candidate = null;
+    picker.drawing = true;
+    picker.drawStart = { x: event.clientX, y: event.clientY };
+    updatePickerDrawBox(event);
+    updatePickerBanner();
+  }
+
+  async function handlePickerPointerUp(event) {
+    if (!picker?.drawMode || !picker.drawing) return;
     event.preventDefault();
     event.stopImmediatePropagation();
 
+    const rectangle = BlurDrawSelection.rectangleFromPoints(
+      picker.drawStart,
+      { x: event.clientX, y: event.clientY }
+    );
+    picker.drawing = false;
+    picker.drawBox.dataset.visible = "false";
+
+    if (!BlurDrawSelection.isUsableRectangle(rectangle)) {
+      updatePickerBanner();
+      showToast("Draw a larger area around the section content");
+      return;
+    }
+
+    const selectedElements = BlurDrawSelection.collectElements(document, rectangle);
+    const candidate = BlurSelectors.findSectionCandidateFromElements(selectedElements, document);
+    if (!candidate) {
+      updatePickerBanner();
+      showToast("Could not find one section around that area");
+      return;
+    }
+
+    const targetSelectors = BlurSelectors.buildRelativeSelectors(candidate, selectedElements);
+    if (!targetSelectors.length) {
+      updatePickerBanner();
+      showToast("Could not identify the content inside that area");
+      return;
+    }
+
+    setPickerCandidate(candidate);
+    picker.targetSelectors = targetSelectors;
+    const selector = BlurSelectors.buildSelector(candidate, document, { matchGroup: true });
+    const matchCount = selector ? safeQueryWithin(document, selector).length : 0;
+    picker.message.textContent = `Found ${matchCount || 1} matching ${matchCount === 1 ? "section" : "sections"} · adding…`;
+    suppressNextPickerClick();
+    await commitPickerCandidate();
+  }
+
+  function cancelPickerDraw() {
+    if (!picker?.drawing) return;
+    picker.drawing = false;
+    picker.drawStart = null;
+    picker.drawBox.dataset.visible = "false";
+    updatePickerBanner();
+  }
+
+  async function handlePickerClick(event) {
+    if (!picker) return;
+    if (event.target instanceof Element &&
+      event.target.closest("#blur-extension-picker-host, #blur-extension-ui-host")) return;
+    if (picker.drawMode) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    if (!picker.candidate) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    await commitPickerCandidate();
+  }
+
+  async function commitPickerCandidate() {
+    if (!picker?.candidate) return;
     const candidate = picker.candidate;
     const profileId = picker.profileId;
     const kind = picker.kind;
+    const targetSelectors = kind === "section" ? picker.targetSelectors : [];
     candidate.classList.remove(PICKER_CLASS);
     const selector = BlurSelectors.buildSelector(candidate, document, { matchGroup: kind === "section" });
-    const label = BlurSelectors.describeElement(candidate);
+    const targetLabel = targetSelectors.length
+      ? ` · ${targetSelectors.length} ${targetSelectors.length === 1 ? "target" : "targets"}`
+      : "";
+    const label = `${BlurSelectors.describeElement(candidate)}${targetLabel}`.slice(0, 80);
     stopPicker();
 
     if (!selector) return showToast("Could not create a stable selector");
@@ -767,8 +919,29 @@
     const profile = nextState.profiles.find((item) => item.id === profileId);
     if (!profile) return showToast("Profile no longer exists");
 
-    const duplicate = profile.rules.some((rule) => rule.selector === selector && rule.kind === kind);
+    const duplicate = profile.rules.some((rule) =>
+      rule.selector === selector &&
+      rule.kind === kind &&
+      BlurSectionTargets.sameSelectors(rule.targetSelectors, targetSelectors)
+    );
     if (duplicate) return showToast("That selection is already in this profile");
+
+    const broadSectionRule = targetSelectors.length
+      ? profile.rules.find((rule) =>
+        rule.selector === selector &&
+        rule.kind === "section" &&
+        !rule.targetSelectors.length
+      )
+      : null;
+    if (broadSectionRule) {
+      broadSectionRule.targetSelectors = targetSelectors;
+      broadSectionRule.label = label;
+      await chrome.storage.local.set({ [BlurCore.STORAGE_KEY]: nextState });
+      showToast(
+        `${matchCount} matching ${matchCount === 1 ? "section" : "sections"} narrowed to drawn content`
+      );
+      return;
+    }
 
     profile.rules.push({
       id: crypto.randomUUID(),
@@ -776,6 +949,7 @@
       kind,
       label,
       enabled: true,
+      targetSelectors,
       condition: BlurTextConditions.SECTION_CONDITIONS.ALWAYS
     });
     await chrome.storage.local.set({ [BlurCore.STORAGE_KEY]: nextState });
@@ -792,7 +966,8 @@
       return;
     }
 
-    if (!picker || picker.kind !== "section" || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+    if (!picker || picker.kind !== "section" || picker.drawMode ||
+      !["ArrowUp", "ArrowDown"].includes(event.key)) return;
     event.preventDefault();
     const next = event.key === "ArrowUp"
       ? picker.candidate?.parentElement
@@ -812,6 +987,62 @@
     picker.highlighted.forEach((element) => element.classList.add(PICKER_CLASS));
   }
 
+  function setPickerDrawMode(enabled) {
+    if (!picker || picker.kind !== "section") return;
+    clearPickerHighlights();
+    picker.candidate = null;
+    picker.pointerTarget = null;
+    picker.drawing = false;
+    picker.drawStart = null;
+    picker.targetSelectors = [];
+    picker.drawMode = Boolean(enabled);
+    picker.drawBox.dataset.visible = "false";
+    picker.drawButton.setAttribute("aria-pressed", String(picker.drawMode));
+    picker.drawButton.textContent = picker.drawMode ? "Drawing on" : "Draw area";
+    document.documentElement.classList.toggle("blur-extension-draw-mode", picker.drawMode);
+    updatePickerBanner();
+  }
+
+  function updatePickerBanner() {
+    if (!picker) return;
+    if (picker.kind !== "section") {
+      picker.message.textContent = "Choose an element to blur";
+      return;
+    }
+    if (!picker.drawMode) {
+      picker.message.textContent = "Choose a card type · all matches · ↑ broader · ↓ narrower";
+      return;
+    }
+    picker.message.textContent = picker.drawing
+      ? "Release to find and add the matching card type"
+      : "Drag around the content that belongs in one section";
+  }
+
+  function updatePickerDrawBox(event) {
+    if (!picker?.drawing) return;
+    const rectangle = BlurDrawSelection.rectangleFromPoints(
+      picker.drawStart,
+      { x: event.clientX, y: event.clientY }
+    );
+    Object.assign(picker.drawBox.style, {
+      left: `${rectangle.left}px`,
+      top: `${rectangle.top}px`,
+      width: `${rectangle.width}px`,
+      height: `${rectangle.height}px`
+    });
+    picker.drawBox.dataset.visible = "true";
+  }
+
+  function suppressNextPickerClick() {
+    const suppress = (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      clearTimeout(timeout);
+    };
+    const timeout = setTimeout(() => document.removeEventListener("click", suppress, true), 250);
+    document.addEventListener("click", suppress, { capture: true, once: true });
+  }
+
   function clearPickerHighlights() {
     picker?.highlighted?.forEach((element) => element.classList.remove(PICKER_CLASS));
     if (picker?.highlighted) picker.highlighted.clear();
@@ -819,9 +1050,13 @@
 
   function stopPicker() {
     clearPickerHighlights();
+    document.documentElement.classList.remove("blur-extension-draw-mode");
     picker?.host.remove();
     picker = null;
+    document.removeEventListener("pointerdown", handlePickerPointerDown, true);
     document.removeEventListener("pointermove", handlePickerMove, true);
+    document.removeEventListener("pointerup", handlePickerPointerUp, true);
+    document.removeEventListener("pointercancel", cancelPickerDraw, true);
     document.removeEventListener("click", handlePickerClick, true);
     document.removeEventListener("keydown", handlePickerKeydown, true);
   }

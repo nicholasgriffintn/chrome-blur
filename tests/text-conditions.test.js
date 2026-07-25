@@ -109,6 +109,16 @@ test("results filtering rejects ambiguous everyday uses", () => {
     ),
     false
   );
+  assert.equal(
+    conditions.sectionMatches(
+      createSection(
+        "Five ways to make the most of the summer holidays with kids " +
+          "Views 6,976 Engaged 0:53 WF % 9.7 Female % 60 16-24 % 20 Published Date Today 00:29"
+      ),
+      config
+    ),
+    false
+  );
 });
 
 test("results filtering accepts score patterns and sports context", () => {

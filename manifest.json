@@ -38,6 +38,8 @@
         "lib/text-conditions.js",
         "lib/state.js",
         "lib/selectors.js",
+        "lib/draw-selection.js",
+        "lib/section-targets.js",
         "lib/blur-model.js",
         "lib/media-lifecycle.js",
         "content.js"

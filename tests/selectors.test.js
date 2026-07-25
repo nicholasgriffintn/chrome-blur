@@ -197,6 +197,45 @@ test("section selectors infer repeated components from a shared parent structure
   );
 });
 
+test("drawn content resolves to one shared card and keeps its repeated selector", () => {
+  const grid = new MockElement({ classes: ["story-grid"] });
+  const card = new MockElement({ localName: "article", classes: ["story-card"], parent: grid });
+  const heading = new MockElement({ localName: "h2", parent: card });
+  const image = new MockElement({ localName: "img", parent: card });
+  const anotherCard = new MockElement({
+    localName: "article",
+    classes: ["story-card"],
+    parent: grid
+  });
+  const root = {
+    documentElement: {},
+    querySelectorAll(selector) {
+      return selector === "article.story-card" ? [card, anotherCard] : [];
+    }
+  };
+
+  const candidate = selectors.findSectionCandidateFromElements([heading, image], root);
+
+  assert.equal(candidate, card);
+  assert.equal(
+    selectors.buildSelector(candidate, root, { matchGroup: true }),
+    "article.story-card"
+  );
+});
+
+test("drawn content keeps precise paths inside the repeated wrapper", () => {
+  const card = new MockElement({ classes: ["result-row"] });
+  const image = new MockElement({ localName: "img", classes: ["cover"], parent: card });
+  const copy = new MockElement({ classes: ["copy"], parent: card });
+  const title = new MockElement({ localName: "h2", parent: copy });
+  new MockElement({ classes: ["published-date"], parent: card });
+
+  assert.deepEqual(
+    Array.from(selectors.buildRelativeSelectors(card, [image, title])),
+    [":scope > img.cover", ":scope > div.copy > h2"]
+  );
+});
+
 function loadSelectors() {
   const context = vm.createContext({
     Element: MockElement,

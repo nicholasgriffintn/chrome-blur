@@ -26,3 +26,9 @@ textarea.blur-extension-pii-field.blur-extension-revealed,
   outline-offset: 3px !important;
   cursor: crosshair !important;
 }
+
+html.blur-extension-draw-mode,
+html.blur-extension-draw-mode * {
+  cursor: crosshair !important;
+  user-select: none !important;
+}

@@ -62,6 +62,29 @@ test("enables sensitive-data protection for default and new profiles", () => {
   );
 });
 
+test("preserves the relative targets of a drawn section rule", () => {
+  const state = core.normaliseState({
+    enabled: true,
+    activeProfileId: "work",
+    profiles: [{
+      ...enabledProfile(["example.com"]),
+      id: "work",
+      rules: [{
+        id: "drawn",
+        selector: ".result-row",
+        kind: "section",
+        label: "Drawn result",
+        targetSelectors: [":scope > img.cover", ":scope > .copy > h2", "", ":scope > img.cover"]
+      }]
+    }]
+  });
+
+  assert.deepEqual(
+    Array.from(state.profiles[0].rules[0].targetSelectors),
+    [":scope > img.cover", ":scope > .copy > h2"]
+  );
+});
+
 test("matches exact hosts without leaking into suffix lookalikes", () => {
   const profile = enabledProfile(["example.com"]);
 

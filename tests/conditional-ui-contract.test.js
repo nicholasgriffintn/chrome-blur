@@ -20,6 +20,17 @@ test("popup exposes trigger terms, presets and a per-section condition", () => {
   assert.match(popup, /aria-pressed="false"/);
 });
 
+test("changing a section condition persists immediately", () => {
+  const popup = read("popup.js");
+  const conditionHandler = popup.match(
+    /condition\.addEventListener\("change",[\s\S]*?(?=row\.querySelector\("\.rule-delete"\))/
+  )?.[0] ?? "";
+
+  assert.match(conditionHandler, /clearTimeout\(saveTimer\)/);
+  assert.match(conditionHandler, /save\(\)\.catch\(showError\)/);
+  assert.doesNotMatch(conditionHandler, /queueSave\(\)/);
+});
+
 test("the content script loads local PII detection before page processing", () => {
   const manifest = JSON.parse(read("manifest.json"));
   const scripts = manifest.content_scripts[0].js;
@@ -28,6 +39,24 @@ test("the content script loads local PII detection before page processing", () =
   assert.ok(scripts.indexOf("lib/pii-dom.js") > scripts.indexOf("lib/pii-detector.js"));
   assert.ok(scripts.indexOf("lib/pii-dom.js") < scripts.indexOf("content.js"));
   assert.ok(scripts.indexOf("lib/pii-detector.js") < scripts.indexOf("content.js"));
+});
+
+test("section picking exposes draw mode and loads its local geometry helper", () => {
+  const manifest = JSON.parse(read("manifest.json"));
+  const scripts = manifest.content_scripts[0].js;
+  const content = read("content.js");
+
+  assert.ok(scripts.indexOf("lib/draw-selection.js") > scripts.indexOf("lib/selectors.js"));
+  assert.ok(scripts.indexOf("lib/draw-selection.js") < scripts.indexOf("content.js"));
+  assert.ok(scripts.indexOf("lib/section-targets.js") > scripts.indexOf("lib/draw-selection.js"));
+  assert.ok(scripts.indexOf("lib/section-targets.js") < scripts.indexOf("content.js"));
+  assert.match(content, /drawButton\.textContent = "Draw area"/);
+  assert.match(content, /Drag around the content that belongs in one section/);
+  assert.match(content, /findSectionCandidateFromElements/);
+  assert.match(content, /buildRelativeSelectors/);
+  assert.match(content, /BlurSectionTargets\.resolve/);
+  assert.match(content, /broadSectionRule\.targetSelectors = targetSelectors/);
+  assert.match(content, /commitPickerCandidate/);
 });
 
 test("sensitive inputs have a dedicated blur rule that can outrank page field styles", () => {

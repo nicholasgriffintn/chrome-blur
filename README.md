@@ -24,9 +24,11 @@ Blur distracting or sensitive page content before it reaches your screen share, 
 3. Select **Use this site** to add the current domain to the default profile.
 4. Adjust the blur strength and choose whether to blur media and sensitive data.
 5. Select **Pick element** or **Pick section**, then choose content on the page.
+   In section mode, enable **Draw area** in the top banner to drag around content
+   that is difficult to reach through the DOM hierarchy.
 6. For conditional sections, enable filter packs or add custom triggers, then change the remembered section from **Always blur** to **On conditional filters**.
 
-The popup closes while picking. In section mode, Blur compares nearby ancestors using repeated data attributes, roles, classes and parent structures, then applies the rule to **every card sharing the inferred component type**. Press `↑` for a broader parent or `↓` for a narrower child, and press `Esc` to cancel selection. Blur saves changes automatically.
+The popup closes while picking. In section mode, Blur compares nearby ancestors using repeated data attributes, roles, classes and parent structures, then applies the rule to **every card sharing the inferred component type**. Press `↑` for a broader parent or `↓` for a narrower child. Alternatively, enable **Draw area** in the top banner and drag around the text, media and controls that belong together. Blur uses all enclosed content to infer their shared section, then remembers precise paths to only those drawn parts inside every matching card. Drawing over a previously saved whole-card rule narrows that rule to the drawn content. Press `Esc` to cancel selection. Blur saves changes automatically.
 
 ## Profiles and site patterns
 
