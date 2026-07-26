@@ -5,7 +5,6 @@
   "description": "Blur sensitive data, distracting media and selected page content with reusable site profiles.",
   "minimum_chrome_version": "120",
   "permissions": [
-    "activeTab",
     "storage"
   ],
   "host_permissions": [

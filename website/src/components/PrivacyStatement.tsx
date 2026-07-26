@@ -1,6 +1,7 @@
 const privacyPoints = [
-  "No analytics, telemetry or advertising",
-  "No page content written to extension storage",
+  "No analytics, telemetry, advertising or accounts",
+  "No page content, field values or media written to storage",
+  "No data sold, shared or transmitted externally",
   "No remote scripts or external API calls",
 ] as const;
 
@@ -16,11 +17,29 @@ export function PrivacyStatement() {
       <div className="privacy__copy">
         <p className="eyebrow">Local by design</p>
         <h2 id="privacy-title">Your page never leaves the page.</h2>
-        <p>
-          Detection happens inside the tab you are viewing. Blur stores your
-          profiles and selectors locally, but never copies, logs or transmits
-          the text and field values it checks.
-        </p>
+        <div className="privacy__policy">
+          <p>
+            Blur processes the current page URL and, on sites matching an
+            enabled profile, visible text, field values, media and page
+            attributes. This local processing applies your blur rules and can
+            identify personal, payment, authentication and IP address data.
+          </p>
+          <p>
+            Profiles, site patterns, blur settings, trigger terms, labels and
+            selectors remain in Chrome&apos;s local extension storage until
+            you change them, reset the extension or uninstall it. Backups are
+            created only when you request one and remain under your control.
+          </p>
+          <p>
+            Blur never stores the page content it checks or sends user data to
+            the developer or another party. Information received through
+            Chrome APIs is used only for Blur&apos;s stated purpose and in
+            accordance with the Chrome Web Store User Data Policy, including
+            the Limited Use requirements. Last updated 26 July 2026.{" "}
+            <a href="https://nicholasgriffin.dev/contact">Contact the developer</a>
+            {" "}with privacy questions.
+          </p>
+        </div>
       </div>
       <ul>
         {privacyPoints.map((point) => (

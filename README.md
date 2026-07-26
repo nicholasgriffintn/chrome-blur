@@ -39,9 +39,13 @@ Select **Backup** to download the current profiles as `blur-settings.json`. Impo
 
 ## Privacy
 
-Blur stores profiles, site patterns, blur settings, trigger terms, selector labels and selectors in Chrome's local extension storage. Backups contain the same settings. It does not store the page text, field values or media it checks.
+Blur processes the current page URL and, on sites matching an enabled profile, visible text, field values, media and page attributes. This local processing applies the user's blur rules and can identify personally identifiable, financial and payment, authentication, and IP address data.
 
-Detection runs inside the current tab. No page content or settings are transmitted, and the extension has no accounts, analytics, advertising, remote scripts or external API calls. Access to all sites lets Blur apply configured profiles early enough to reduce visible flashes; unmatched sites receive no blur treatment.
+Profiles, site patterns, blur settings, trigger terms, selector labels and selectors remain in Chrome's local extension storage until they are changed, reset or the extension is uninstalled. Backups are created only when requested and contain the same settings. Blur does not store the page text, field values or media it checks.
+
+Detection runs inside the current tab. No page content or settings are sold, shared or transmitted, and the extension has no accounts, analytics, advertising, remote scripts or external API calls. Access to all sites lets Blur apply configured profiles early enough to reduce visible flashes; unmatched sites receive no blur treatment.
+
+Information received through Chrome APIs is used only for Blur's stated purpose and in accordance with the Chrome Web Store User Data Policy, including the Limited Use requirements. The privacy policy was last updated on 26 July 2026. [Contact the developer](https://nicholasgriffin.dev/contact) with privacy questions.
 
 Chrome prevents extensions from changing protected pages such as `chrome://` URLs and the Chrome Web Store.
 

@@ -158,6 +158,7 @@ test("manifest contains no remote scripts and uses document-start injection", ()
   ];
 
   assert.equal(manifest.manifest_version, 3);
+  assert.deepEqual(manifest.permissions, ["storage"]);
   assert.equal(contentScript.run_at, "document_start");
   assert.deepEqual(contentScript.matches, ["<all_urls>"]);
   assert.equal(packagedFiles.every((file) => fs.existsSync(path.join(repositoryRoot, file))), true);

@@ -1,4 +1,4 @@
-import extensionPreview from "../../../screenshots/extension.png";
+import extensionPreview from "../../../screenshots/screenshot.png";
 
 export function ProductPreview() {
   return (

@@ -775,8 +775,19 @@ img {
   font-size: clamp(2.5rem, 4.4vw, 3.8rem);
 }
 
-.privacy__copy > p:last-child {
+.privacy__policy {
+  display: grid;
+  gap: 12px;
+}
+
+.privacy__policy p {
+  margin: 0;
   color: #aeb4bf;
+}
+
+.privacy__policy a {
+  color: var(--mint);
+  text-underline-offset: 3px;
 }
 
 .privacy ul {
