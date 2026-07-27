@@ -30,12 +30,11 @@ Profiles accept one site pattern per line. Examples include `example.com`, `*.ex
 
 Select **Backup** to download the current profiles as `blur-settings.json`. Importing a backup replaces the current settings.
 
-## Install from source
+## Install
 
-1. Open `chrome://extensions`.
-2. Enable **Developer mode**.
-3. Select **Load unpacked** and choose this repository.
-4. Reload an already-open website after the first installation.
+[Install Blur from the Chrome Web Store](https://chromewebstore.google.com/detail/blur/mplijkpcafdcpneoiofnppmdclpbdjoc).
+
+For local development, open `chrome://extensions`, enable **Developer mode**, then select **Load unpacked** and choose this repository. Reload an already-open website after the first installation.
 
 ## Privacy
 
