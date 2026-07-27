@@ -192,13 +192,30 @@ test("violence filtering covers acute disasters and human-targeted threats", () 
   }
 });
 
+test("violence filtering covers sensitive news headline language", () => {
+  const config = presetConfig("violence");
+  const headlines = [
+    "Ukraine dismisses Iranian threats as Caspian Sea strike directly links wars",
+    "Man jailed for abduction and rape of girl, 15, in Edinburgh basement",
+    "Funeral director who left people unburied breached families' trust 'on industrial scale', court hears",
+    "Military unit fights intense flames west of Madrid"
+  ];
+
+  assert.deepEqual(
+    headlines.filter((headline) => conditions.sectionMatches(createSection(headline), config)),
+    headlines
+  );
+});
+
 test("violence filtering rejects ambiguous fire, incident and commercial threat language", () => {
   const config = presetConfig("violence");
   const headlines = [
     "The fire sale ends on Friday",
     "Officials discussed a minor incident in the report",
     "The company threatened to withdraw its offer",
-    "Learn how to chop up an onion"
+    "Learn how to chop up an onion",
+    "Supermarkets start price wars ahead of summer",
+    "Former TV co-stars revisit old flames"
   ];
 
   for (const headline of headlines) {
