@@ -71,6 +71,17 @@ test("queues changed text and accessible descriptions for conditional reevaluati
   assert.equal(lifecycle.observerOptions(false).characterData, undefined);
 });
 
+test("collapses nested mutation roots into one deferred scan", () => {
+  const leaf = createElement("span");
+  const child = createElement("section", [leaf]);
+  const parent = createElement("main", [child]);
+
+  assert.deepEqual(
+    [...lifecycle.collapseRoots(new Set([leaf, parent, child]))],
+    [parent]
+  );
+});
+
 test("queues sensitive field changes for immediate PII reevaluation", () => {
   const field = createElement("input");
   const roots = lifecycle.collectDeferredRoots([
@@ -116,6 +127,9 @@ function createElement(tagName, children = []) {
     },
     querySelectorAll(selector) {
       return descendantsOf(this).filter((child) => child.matches(selector));
+    },
+    contains(candidate) {
+      return candidate === this || descendantsOf(this).includes(candidate);
     }
   };
 

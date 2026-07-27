@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Blur",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Blur sensitive data, distracting media and selected page content with reusable site profiles.",
   "minimum_chrome_version": "120",
   "permissions": [
@@ -41,6 +41,7 @@
         "lib/section-targets.js",
         "lib/blur-model.js",
         "lib/media-lifecycle.js",
+        "lib/scan-plan.js",
         "content.js"
       ],
       "run_at": "document_start",

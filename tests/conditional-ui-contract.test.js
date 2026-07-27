@@ -88,12 +88,28 @@ test("reapplying rules clears reveal exceptions and supports keyboard reveal", (
   assert.match(content, /event[.]altKey/);
 });
 
-test("matching pages periodically refresh script-populated sensitive fields", () => {
+test("matching pages periodically refresh only tracked script-populated sensitive fields", () => {
   const content = read("content.js");
 
   assert.match(content, /function configurePiiRefresh/);
   assert.match(content, /setInterval[(]refreshPiiFields, 2000[)]/);
-  assert.match(content, /BlurPiiDom[.]FIELD_SELECTOR/);
+  assert.match(content, /trackedPiiFields/);
+  assert.doesNotMatch(
+    content.match(/function refreshPiiFields\(\)[\s\S]*?(?=\n  function )/)?.[0] ?? "",
+    /document[.]querySelectorAll/
+  );
+});
+
+test("mutation scans use one compiled plan and skip work completed by immediate guards", () => {
+  const manifest = JSON.parse(read("manifest.json"));
+  const content = read("content.js");
+  const scripts = manifest.content_scripts[0].js;
+
+  assert.ok(scripts.indexOf("lib/scan-plan.js") < scripts.indexOf("content.js"));
+  assert.match(content, /BlurScanPlan[.]create/);
+  assert.match(content, /skipPii:\s*true/);
+  assert.match(content, /skipConditional:\s*true/);
+  assert.match(content, /skipNativeMedia:\s*true/);
 });
 
 test("popup reports invalid site patterns next to the editor", () => {

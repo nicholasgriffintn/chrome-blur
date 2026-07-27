@@ -116,12 +116,32 @@ test("supports host paths and complete URL globs", () => {
   );
 });
 
+test("matches shorthand host patterns with ports", () => {
+  const profile = enabledProfile(["localhost:3000/*", "*.example.test:8443/private/*"]);
+
+  assert.equal(core.profileMatchesUrl(profile, "http://localhost:3000/dashboard"), true);
+  assert.equal(core.profileMatchesUrl(profile, "http://localhost:4000/dashboard"), false);
+  assert.equal(core.profileMatchesUrl(profile, "https://api.example.test:8443/private/one"), true);
+  assert.equal(core.profileMatchesUrl(profile, "https://api.example.test/private/one"), false);
+  assert.equal(core.profileMatchesUrl(enabledProfile(["example.test:443"]), "https://example.test/"), true);
+});
+
 test("rejects malformed or unsafe site patterns", () => {
   assert.equal(core.getPatternError("https://example.com/private/*"), "");
   assert.equal(core.getPatternError("*.example.com"), "");
   assert.match(core.getPatternError("javascript://example.com"), /HTTP/);
   assert.match(core.getPatternError("example .com"), /spaces/);
+  assert.match(core.getPatternError("localhost:0"), /1 and 65535/);
+  assert.match(core.getPatternError("localhost:65536"), /1 and 65535/);
+  assert.equal(core.getPatternError("localhost:65535"), "");
   assert.deepEqual(Array.from(core.parsePatterns("example.com\nexample .com\njavascript://x")), ["example.com"]);
+});
+
+test("release metadata stays aligned", () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "manifest.json"), "utf8"));
+  const packageJson = JSON.parse(fs.readFileSync(path.join(repositoryRoot, "package.json"), "utf8"));
+
+  assert.equal(manifest.version, packageJson.version);
 });
 
 test("returns only active profiles matching a web URL", () => {

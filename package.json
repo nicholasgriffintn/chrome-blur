@@ -1,9 +1,9 @@
 {
   "name": "blur-chrome-extension",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": true,
   "scripts": {
-    "check": "node --check service-worker.js && node --check content.js && node --check popup.js && node --check lib/pii-detector.js && node --check lib/pii-dom.js && node --check lib/text-conditions.js && node --check lib/state.js && node --check lib/selectors.js && node --check lib/draw-selection.js && node --check lib/section-targets.js && node --check lib/blur-model.js && node --check lib/media-lifecycle.js",
+    "check": "node --check service-worker.js && node --check content.js && node --check popup.js && node --check lib/pii-detector.js && node --check lib/pii-dom.js && node --check lib/text-conditions.js && node --check lib/state.js && node --check lib/selectors.js && node --check lib/draw-selection.js && node --check lib/section-targets.js && node --check lib/blur-model.js && node --check lib/media-lifecycle.js && node --check lib/scan-plan.js",
     "test": "node --test tests/*.test.js",
     "package": "zip -FS -r blur.zip manifest.json content.css content.js popup.css popup.html popup.js service-worker.js lib icons README.md package.json"
   }

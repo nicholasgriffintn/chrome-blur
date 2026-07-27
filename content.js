@@ -27,6 +27,7 @@
 
   let state = BlurCore.createDefaultState();
   let profiles = [];
+  let scanPlan = BlurScanPlan.create();
   let observer;
   let picker;
   let revealControl;
@@ -37,6 +38,7 @@
   let applyFrame;
   let currentDocumentUrl = location.href;
   const registry = BlurModel.createRegistry();
+  const trackedPiiFields = new Set();
   let revealedTargets = new WeakSet();
   let revealedSections = new WeakSet();
 
@@ -45,7 +47,7 @@
   async function initialise() {
     const stored = await chrome.storage.local.get(BlurCore.STORAGE_KEY);
     state = BlurCore.normaliseState(stored[BlurCore.STORAGE_KEY]);
-    profiles = BlurCore.matchingProfiles(state, location.href);
+    setProfiles(BlurCore.matchingProfiles(state, location.href));
 
     syncPageFeatures();
     reportStatus();
@@ -60,7 +62,7 @@
   function handleStorageChange(changes, areaName) {
     if (areaName !== "local" || !changes[BlurCore.STORAGE_KEY]) return;
     state = BlurCore.normaliseState(changes[BlurCore.STORAGE_KEY].newValue);
-    profiles = BlurCore.matchingProfiles(state, location.href);
+    setProfiles(BlurCore.matchingProfiles(state, location.href));
     const transitioned = syncPageFeatures();
     if (pageFeaturesActive && !transitioned) reapplyAll();
     reportStatus();
@@ -133,6 +135,7 @@
     if (applyFrame) cancelAnimationFrame(applyFrame);
     applyFrame = undefined;
     pendingRoots.clear();
+    trackedPiiFields.clear();
     hideRevealButton();
     revealControl?.host.remove();
     revealControl = undefined;
@@ -143,7 +146,7 @@
   function refreshProfilesForCurrentUrl() {
     if (location.href === currentDocumentUrl) return false;
     currentDocumentUrl = location.href;
-    profiles = BlurCore.matchingProfiles(state, currentDocumentUrl);
+    setProfiles(BlurCore.matchingProfiles(state, currentDocumentUrl));
     const transitioned = syncPageFeatures();
     if (pageFeaturesActive && !transitioned) reapplyAll();
     reportStatus();
@@ -154,9 +157,13 @@
     if (applyFrame || !pendingRoots.size) return;
     applyFrame = requestAnimationFrame(() => {
       applyFrame = undefined;
-      const roots = [...pendingRoots];
+      const roots = BlurMediaLifecycle.collapseRoots(pendingRoots);
       pendingRoots = new Set();
-      withObserverPaused(() => roots.forEach(applyProfiles));
+      withObserverPaused(() => roots.forEach((root) => applyProfiles(root, {
+        skipPii: true,
+        skipConditional: true,
+        skipNativeMedia: true
+      })));
     });
   }
 
@@ -174,44 +181,50 @@
     configurePiiRefresh();
   }
 
-  function applyProfiles(root) {
+  function applyProfiles(
+    root,
+    { skipPii = false, skipConditional = false, skipNativeMedia = false } = {}
+  ) {
     if (!profiles.length || !root) return;
 
-    applyPiiProfiles(root);
+    if (!skipPii) applyPiiProfiles(root);
 
-    for (const profile of profiles) {
-      const radius = BlurCore.blurPixels(profile.blurAmount);
+    for (const { radius, sourceId } of scanPlan.mediaProfiles) {
+      if (!skipNativeMedia) {
+        findWithin(root, MEDIA_SELECTOR)
+          .forEach((element) => markTarget(element, radius, sourceId));
+      }
+      findBackgroundTargets(root, false).forEach((element) => markBackgroundTarget(element, radius, sourceId));
+    }
 
-      if (profile.blurMedia) {
-        const sourceId = `${profile.id}:media`;
-        findWithin(root, MEDIA_SELECTOR).forEach((element) => markTarget(element, radius, sourceId));
-        findBackgroundTargets(root, false).forEach((element) => markBackgroundTarget(element, radius, sourceId));
+    for (const { profile, rule, radius, sourceId } of scanPlan.rules) {
+      if (
+        skipConditional
+        && rule.kind === "section"
+        && rule.condition === BlurTextConditions.SECTION_CONDITIONS.TRIGGER
+      ) {
+        continue;
+      }
+      const matches = safeQueryWithin(root, rule.selector);
+      for (const element of matches) {
+        if (rule.kind === "section") {
+          applySectionRule(element, element, profile, rule, radius, sourceId);
+        } else {
+          markTarget(element, radius, sourceId);
+        }
       }
 
-      for (const rule of profile.rules) {
-        if (!rule.enabled) continue;
-        const sourceId = `${profile.id}:${rule.id}`;
-        const matches = safeQueryWithin(root, rule.selector);
-        for (const element of matches) {
-          if (rule.kind === "section") {
-            applySectionRule(element, element, profile, rule, radius, sourceId);
-          } else {
-            markTarget(element, radius, sourceId);
-          }
-        }
-
-        if (rule.kind === "section" && root instanceof Element) {
-          const boundary = safeClosest(root, rule.selector);
-          if (boundary && !matches.includes(boundary)) {
-            applySectionRule(root, boundary, profile, rule, radius, sourceId);
-          }
+      if (rule.kind === "section" && root instanceof Element) {
+        const boundary = safeClosest(root, rule.selector);
+        if (boundary && !matches.includes(boundary)) {
+          applySectionRule(root, boundary, profile, rule, radius, sourceId);
         }
       }
     }
   }
 
   function applyPiiProfiles(root) {
-    const piiProfiles = profiles.filter((profile) => profile.blurPii);
+    const piiProfiles = scanPlan.piiProfiles;
     if (!piiProfiles.length) return;
 
     BlurPiiDom.apply(root, {
@@ -222,6 +235,7 @@
         markPiiTarget(element, piiProfiles);
       },
       onField(field) {
+        trackedPiiFields.add(field);
         updatePiiField(field, piiProfiles);
       }
     });
@@ -284,28 +298,21 @@
     if (!profiles.length) return;
 
     for (const target of targets) {
-      for (const profile of profiles) {
-        const radius = BlurCore.blurPixels(profile.blurAmount);
+      for (const { radius, sourceId } of scanPlan.mediaProfiles) {
+        markTarget(target, radius, sourceId);
+      }
 
-        if (profile.blurMedia) {
-          markTarget(target, radius, `${profile.id}:media`);
-        }
-
-        for (const rule of profile.rules) {
-          if (!rule.enabled) continue;
-          const sourceId = `${profile.id}:${rule.id}`;
-
-          if (rule.kind === "section") {
-            const boundary = safeClosest(target, rule.selector);
-            if (!boundary || !sectionRuleMatchesCondition(boundary, profile, rule)) {
-              continue;
-            }
-            if (!BlurSectionTargets.contains(boundary, target, rule.targetSelectors)) continue;
-            boundary.classList.add(SECTION_CLASS);
-            markTarget(target, radius, sourceId, boundary);
-          } else if (safeClosest(target, rule.selector) === target) {
-            markTarget(target, radius, sourceId);
+      for (const { profile, rule, radius, sourceId } of scanPlan.rules) {
+        if (rule.kind === "section") {
+          const boundary = safeClosest(target, rule.selector);
+          if (!boundary || !sectionRuleMatchesCondition(boundary, profile, rule)) {
+            continue;
           }
+          if (!BlurSectionTargets.contains(boundary, target, rule.targetSelectors)) continue;
+          boundary.classList.add(SECTION_CLASS);
+          markTarget(target, radius, sourceId, boundary);
+        } else if (safeClosest(target, rule.selector) === target) {
+          markTarget(target, radius, sourceId);
         }
       }
     }
@@ -314,40 +321,27 @@
   function guardConditionalSections(roots) {
     if (!roots.size || !hasConditionalSectionRules()) return;
 
-    for (const profile of profiles) {
-      const radius = BlurCore.blurPixels(profile.blurAmount);
-      for (const rule of profile.rules) {
-        if (
-          !rule.enabled ||
-          rule.kind !== "section" ||
-          rule.condition !== BlurTextConditions.SECTION_CONDITIONS.TRIGGER
-        ) {
-          continue;
-        }
-
-        const boundaries = new Set();
-        for (const root of roots) {
-          safeQueryWithin(root, rule.selector).forEach((boundary) => boundaries.add(boundary));
-          const boundary = safeClosest(root, rule.selector);
-          if (boundary) boundaries.add(boundary);
-        }
-
-        const sourceId = `${profile.id}:${rule.id}`;
-        boundaries.forEach((boundary) => {
-          applySectionRule(boundary, boundary, profile, rule, radius, sourceId);
-        });
+    for (const { profile, rule, radius, sourceId } of scanPlan.conditionalRules) {
+      const boundaries = new Set();
+      for (const root of roots) {
+        safeQueryWithin(root, rule.selector).forEach((boundary) => boundaries.add(boundary));
+        const boundary = safeClosest(root, rule.selector);
+        if (boundary) boundaries.add(boundary);
       }
+      boundaries.forEach((boundary) => {
+        applySectionRule(boundary, boundary, profile, rule, radius, sourceId);
+      });
     }
   }
 
   function guardPiiRoots(roots) {
-    if (!roots.size || !profiles.some((profile) => profile.blurPii)) return;
+    if (!roots.size || !scanPlan.piiProfiles.length) return;
     const scanRoots = new Set();
     roots.forEach((root) => {
       scanRoots.add(root);
       if (root.parentElement) scanRoots.add(root.parentElement);
     });
-    scanRoots.forEach(applyPiiProfiles);
+    BlurMediaLifecycle.collapseRoots(scanRoots).forEach(applyPiiProfiles);
   }
 
   function handleSensitiveFieldInput(event) {
@@ -359,14 +353,14 @@
     }
     withObserverPaused(() => updatePiiField(
       event.target,
-      profiles.filter((profile) => profile.blurPii)
+      scanPlan.piiProfiles
     ));
   }
 
   function configurePiiRefresh() {
     clearInterval(piiRefreshTimer);
     piiRefreshTimer = undefined;
-    if (!pageFeaturesActive || !profiles.some((profile) => profile.blurPii)) return;
+    if (!pageFeaturesActive || !scanPlan.piiProfiles.length) return;
     piiRefreshTimer = setInterval(refreshPiiFields, 2000);
   }
 
@@ -374,12 +368,16 @@
     if (
       !pageFeaturesActive
       || document.hidden
-      || !profiles.some((profile) => profile.blurPii)
+      || !scanPlan.piiProfiles.length
     ) return;
-    const piiProfiles = profiles.filter((profile) => profile.blurPii);
     withObserverPaused(() => {
-      document.querySelectorAll(BlurPiiDom.FIELD_SELECTOR)
-        .forEach((field) => updatePiiField(field, piiProfiles));
+      for (const field of trackedPiiFields) {
+        if (field.isConnected === false) {
+          trackedPiiFields.delete(field);
+          continue;
+        }
+        updatePiiField(field, scanPlan.piiProfiles);
+      }
     });
   }
 
@@ -627,15 +625,11 @@
   }
 
   function needsTextObservation() {
-    return profiles.some((profile) => profile.blurPii) || hasConditionalSectionRules();
+    return scanPlan.needsTextObservation;
   }
 
   function hasConditionalSectionRules() {
-    return profiles.some((profile) => profile.rules.some((rule) =>
-      rule.enabled &&
-        rule.kind === "section" &&
-        rule.condition === BlurTextConditions.SECTION_CONDITIONS.TRIGGER
-    ));
+    return scanPlan.conditionalRules.length > 0;
   }
 
   function createRevealControl() {
@@ -731,18 +725,17 @@
   }
 
   function ensureHoveredBackgroundIsBlurred(element) {
-    if (!profiles.some((profile) => profile.blurMedia)) return;
+    if (!scanPlan.mediaProfiles.length) return;
 
     let candidate = element;
     for (let depth = 0; candidate && depth < 4; depth += 1) {
       if (hasImageBackground(candidate)) {
         const section = candidate.closest(`.${SECTION_CLASS}`);
-        for (const profile of profiles) {
-          if (!profile.blurMedia) continue;
+        for (const { radius, sourceId } of scanPlan.mediaProfiles) {
           markBackgroundTarget(
             candidate,
-            BlurCore.blurPixels(profile.blurAmount),
-            `${profile.id}:media`,
+            radius,
+            sourceId,
             section
           );
         }
@@ -750,6 +743,11 @@
       }
       candidate = candidate.parentElement;
     }
+  }
+
+  function setProfiles(nextProfiles) {
+    profiles = nextProfiles;
+    scanPlan = BlurScanPlan.create(profiles);
   }
 
   function positionRevealControl(anchor) {
